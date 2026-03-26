@@ -1,23 +1,30 @@
 /**
  * Pjak SDK — Drop into any app to add påskäggsjakt functionality.
+ * v2: Permanent eggs, replayable sessions with fresh codes.
  *
  * Usage:
  *   import { PjakGame } from 'pjak-sdk';
- *   const game = new PjakGame(supabaseUrl, supabaseKey);
- *   await game.connect(gameId);
- *   game.onWaypointChange((waypoint) => { ... });
- *   game.updatePlayerPosition(lat, lng);
+ *   const pjak = new PjakGame(supabaseUrl, supabaseKey);
+ *   await pjak.connectLatest();
+ *   pjak.on('eggFound', (egg, code) => { ... });
+ *   pjak.updatePlayerPosition(lat, lng);
  */
 
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 
-export type Waypoint = {
+export type Egg = {
   id: string;
-  game_id: string;
   idx: number;
   label: string;
   lat: number;
   lng: number;
+};
+
+export type SessionEgg = {
+  id: string;
+  game_id: string;
+  egg_id: string;
+  idx: number;
   code: string;
   collected: boolean;
 };
@@ -25,21 +32,17 @@ export type Waypoint = {
 export type Game = {
   id: string;
   name: string;
-  current_waypoint_index: number;
+  current_egg_index: number;
   status: 'waiting' | 'active' | 'finished';
-};
-
-export type PlayerPosition = {
-  lat: number;
-  lng: number;
 };
 
 export type PjakEvents = {
   gameUpdate: (game: Game) => void;
-  waypointChange: (waypoints: Waypoint[]) => void;
-  currentWaypoint: (waypoint: Waypoint | null) => void;
+  eggsLoaded: (eggs: Egg[]) => void;
+  sessionUpdate: (sessionEggs: SessionEgg[]) => void;
+  currentEgg: (egg: Egg | null, sessionEgg: SessionEgg | null) => void;
   proximity: (distance: number, isInRange: boolean) => void;
-  eggFound: (waypoint: Waypoint, code: string) => void;
+  eggFound: (egg: Egg, code: string) => void;
   gameFinished: () => void;
 };
 
@@ -47,8 +50,8 @@ export class PjakGame {
   private supabase: SupabaseClient;
   private channel: RealtimeChannel | null = null;
   private game: Game | null = null;
-  private waypoints: Waypoint[] = [];
-  private playerPos: PlayerPosition = { lat: 0, lng: 0 };
+  private eggs: Egg[] = [];
+  private sessionEggs: SessionEgg[] = [];
   private listeners: Partial<{ [K in keyof PjakEvents]: PjakEvents[K][] }> = {};
   private proximityRadius: number;
 
@@ -57,8 +60,18 @@ export class PjakGame {
     this.proximityRadius = proximityRadius;
   }
 
-  // --- Connect to a game ---
+  // --- Load permanent eggs ---
+  async loadEggs(): Promise<Egg[]> {
+    const { data } = await this.supabase.from('eggs').select('*').order('idx');
+    this.eggs = data || [];
+    this.emit('eggsLoaded', this.eggs);
+    return this.eggs;
+  }
+
+  // --- Connect to a game session ---
   async connect(gameId: string): Promise<Game | null> {
+    await this.loadEggs();
+
     const { data: game } = await this.supabase
       .from('games')
       .select('*')
@@ -68,15 +81,14 @@ export class PjakGame {
     if (!game) return null;
     this.game = game;
 
-    const { data: wps } = await this.supabase
-      .from('waypoints')
+    const { data: ses } = await this.supabase
+      .from('session_eggs')
       .select('*')
       .eq('game_id', gameId)
       .order('idx');
+    this.sessionEggs = ses || [];
 
-    this.waypoints = wps || [];
-
-    // Subscribe to realtime updates
+    // Subscribe to realtime
     this.channel = this.supabase
       .channel(`pjak-${gameId}`)
       .on(
@@ -85,22 +97,22 @@ export class PjakGame {
         (payload) => {
           this.game = payload.new as Game;
           this.emit('gameUpdate', this.game);
-          this.emit('currentWaypoint', this.getCurrentWaypoint());
+          this.emitCurrentEgg();
           if (this.game.status === 'finished') this.emit('gameFinished');
         }
       )
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'waypoints', filter: `game_id=eq.${gameId}` },
+        { event: '*', schema: 'public', table: 'session_eggs', filter: `game_id=eq.${gameId}` },
         async () => {
           const { data } = await this.supabase
-            .from('waypoints')
+            .from('session_eggs')
             .select('*')
             .eq('game_id', gameId)
             .order('idx');
-          this.waypoints = data || [];
-          this.emit('waypointChange', this.waypoints);
-          this.emit('currentWaypoint', this.getCurrentWaypoint());
+          this.sessionEggs = data || [];
+          this.emit('sessionUpdate', this.sessionEggs);
+          this.emitCurrentEgg();
         }
       )
       .subscribe();
@@ -108,7 +120,7 @@ export class PjakGame {
     return this.game;
   }
 
-  // --- Connect to the latest active game ---
+  // --- Connect to latest active game ---
   async connectLatest(): Promise<Game | null> {
     const { data: games } = await this.supabase
       .from('games')
@@ -120,10 +132,8 @@ export class PjakGame {
     return this.connect(games[0].id);
   }
 
-  // --- Update player GPS position ---
+  // --- Update player GPS ---
   async updatePlayerPosition(lat: number, lng: number): Promise<void> {
-    this.playerPos = { lat, lng };
-
     if (this.game) {
       await this.supabase.from('player_position').upsert(
         { game_id: this.game.id, lat, lng, updated_at: new Date().toISOString() },
@@ -131,49 +141,47 @@ export class PjakGame {
       );
     }
 
-    // Check proximity to current waypoint
-    const current = this.getCurrentWaypoint();
-    if (current) {
-      const dist = this.distanceMeters(lat, lng, current.lat, current.lng);
+    // Check proximity
+    const { egg } = this.getCurrentEgg();
+    if (egg) {
+      const dist = this.distanceMeters(lat, lng, egg.lat, egg.lng);
       const inRange = dist <= this.proximityRadius;
       this.emit('proximity', dist, inRange);
 
       if (inRange) {
-        this.emit('eggFound', current, current.code);
+        const se = this.getCurrentSessionEgg();
+        if (se) this.emit('eggFound', egg, se.code);
       }
     }
   }
 
-  // --- Get current waypoint ---
-  getCurrentWaypoint(): Waypoint | null {
+  // --- Get current egg ---
+  getCurrentEgg(): { egg: Egg | null; sessionEgg: SessionEgg | null } {
+    if (!this.game) return { egg: null, sessionEgg: null };
+    const se = this.sessionEggs.find(s => s.idx === this.game!.current_egg_index);
+    const egg = se ? this.eggs.find(e => e.id === se.egg_id) || null : null;
+    return { egg, sessionEgg: se || null };
+  }
+
+  private getCurrentSessionEgg(): SessionEgg | null {
     if (!this.game) return null;
-    return this.waypoints.find(w => w.idx === this.game!.current_waypoint_index) || null;
-  }
-
-  // --- Get all waypoints ---
-  getWaypoints(): Waypoint[] {
-    return this.waypoints;
-  }
-
-  // --- Get game state ---
-  getGame(): Game | null {
-    return this.game;
+    return this.sessionEggs.find(s => s.idx === this.game!.current_egg_index) || null;
   }
 
   // --- Mark egg as collected ---
-  async collectEgg(waypointId: string): Promise<void> {
-    await this.supabase
-      .from('waypoints')
-      .update({ collected: true })
-      .eq('id', waypointId);
+  async collectEgg(sessionEggId: string): Promise<void> {
+    await this.supabase.from('session_eggs').update({ collected: true }).eq('id', sessionEggId);
   }
 
-  // --- Event listeners ---
+  // --- Getters ---
+  getEggs(): Egg[] { return this.eggs; }
+  getSessionEggs(): SessionEgg[] { return this.sessionEggs; }
+  getGame(): Game | null { return this.game; }
+
+  // --- Events ---
   on<K extends keyof PjakEvents>(event: K, callback: PjakEvents[K]): () => void {
     if (!this.listeners[event]) this.listeners[event] = [];
     (this.listeners[event] as PjakEvents[K][]).push(callback);
-
-    // Return unsubscribe function
     return () => {
       const arr = this.listeners[event] as PjakEvents[K][];
       const idx = arr.indexOf(callback);
@@ -186,6 +194,11 @@ export class PjakGame {
     if (cbs) cbs.forEach(cb => (cb as (...a: any[]) => void)(...args));
   }
 
+  private emitCurrentEgg(): void {
+    const { egg, sessionEgg } = this.getCurrentEgg();
+    this.emit('currentEgg', egg, sessionEgg);
+  }
+
   // --- Disconnect ---
   async disconnect(): Promise<void> {
     if (this.channel) {
@@ -194,7 +207,7 @@ export class PjakGame {
     }
   }
 
-  // --- Haversine distance ---
+  // --- Haversine ---
   private distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
     const R = 6371000;
     const toRad = (d: number) => (d * Math.PI) / 180;

@@ -374,3 +374,95 @@ h1 {
   font-size: 42px;
   margin-bottom: 24px;
 }
+
+/* Sidebar header */
+.sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: #888;
+}
+
+.edit-eggs-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #aaa;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.edit-eggs-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+/* Compact egg list (existing eggs in setup) */
+.egg-list.compact {
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.egg-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  font-size: 13px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+}
+
+/* Setup actions */
+.setup-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.secondary-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #aaa;
+  padding: 12px 20px;
+  border-radius: 10px;
+  font-size: 14px;
+  cursor: pointer;
+  width: 100%;
+  text-align: center;
+}
+
+.secondary-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+/* Start section */
+.start-section {
+  text-align: center;
+  padding: 20px 0;
+}
+
+.start-section h2 {
+  font-size: 28px;
+  margin-bottom: 16px;
+}
+
+.start-hint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #666;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 30px 0;
+  color: #888;
+}
+
+.empty-state p {
+  margin-bottom: 16px;
+}

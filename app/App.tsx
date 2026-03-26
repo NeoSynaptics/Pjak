@@ -10,29 +10,37 @@ import {
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker } from 'react-native-maps';
 import { supabase, PROXIMITY_RADIUS_M } from './src/supabase';
 import { distanceMeters } from './src/geo';
 
-type Waypoint = {
+type Egg = {
   id: string;
   idx: number;
   label: string;
   lat: number;
   lng: number;
+};
+
+type SessionEgg = {
+  id: string;
+  game_id: string;
+  egg_id: string;
+  idx: number;
   code: string;
   collected: boolean;
 };
 
-type GameState = {
+type Game = {
   id: string;
-  current_waypoint_index: number;
+  current_egg_index: number;
   status: string;
 };
 
 export default function App() {
-  const [game, setGame] = useState<GameState | null>(null);
-  const [waypoints, setWaypoints] = useState<Waypoint[]>([]);
+  const [game, setGame] = useState<Game | null>(null);
+  const [eggs, setEggs] = useState<Egg[]>([]);
+  const [sessionEggs, setSessionEggs] = useState<SessionEgg[]>([]);
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
   const [showEgg, setShowEgg] = useState(false);
@@ -43,12 +51,15 @@ export default function App() {
   const bounceAnim = useRef(new Animated.Value(0)).current;
   const mapRef = useRef<MapView>(null);
 
-  // --- Fetch game and waypoints ---
-  useEffect(() => {
-    loadGame();
-  }, []);
+  // --- Load game ---
+  useEffect(() => { loadGame(); }, []);
 
   async function loadGame() {
+    // Load permanent eggs
+    const { data: eggsData } = await supabase.from('eggs').select('*').order('idx');
+    if (eggsData) setEggs(eggsData);
+
+    // Load latest game
     const { data: games } = await supabase
       .from('games')
       .select('*')
@@ -57,41 +68,40 @@ export default function App() {
 
     if (games && games.length > 0) {
       setGame(games[0]);
-      const { data: wps } = await supabase
-        .from('waypoints')
+      const { data: ses } = await supabase
+        .from('session_eggs')
         .select('*')
         .eq('game_id', games[0].id)
         .order('idx');
-      if (wps) setWaypoints(wps);
+      if (ses) setSessionEggs(ses);
     }
   }
 
-  // --- Subscribe to game changes (Mac advances waypoint) ---
+  // --- Realtime: game + session updates ---
   useEffect(() => {
     if (!game) return;
 
     const channel = supabase
-      .channel('game-updates')
+      .channel('phone-updates')
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'games', filter: `id=eq.${game.id}` },
         (payload) => {
-          setGame(payload.new as GameState);
+          setGame(payload.new as Game);
           setShowEgg(false);
           setCollected(false);
         }
       )
       .on(
         'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'waypoints', filter: `game_id=eq.${game.id}` },
+        { event: '*', schema: 'public', table: 'session_eggs', filter: `game_id=eq.${game.id}` },
         () => {
-          // Reload waypoints when any changes
           supabase
-            .from('waypoints')
+            .from('session_eggs')
             .select('*')
             .eq('game_id', game.id)
             .order('idx')
-            .then(({ data }) => { if (data) setWaypoints(data); });
+            .then(({ data }) => { if (data) setSessionEggs(data); });
         }
       )
       .subscribe();
@@ -111,11 +121,7 @@ export default function App() {
       }
 
       sub = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.High,
-          distanceInterval: 2,
-          timeInterval: 2000,
-        },
+        { accuracy: Location.Accuracy.High, distanceInterval: 2, timeInterval: 2000 },
         (loc) => {
           setUserLat(loc.coords.latitude);
           setUserLng(loc.coords.longitude);
@@ -141,35 +147,28 @@ export default function App() {
   }, [game?.id, userLat, userLng]);
 
   // --- Proximity check ---
-  const currentWaypoint = waypoints.find((w) => w.idx === game?.current_waypoint_index);
+  const currentSessionEgg = sessionEggs.find(se => se.idx === game?.current_egg_index);
+  const currentEgg = currentSessionEgg ? eggs.find(e => e.id === currentSessionEgg.egg_id) : null;
 
   useEffect(() => {
-    if (!currentWaypoint || userLat === null || userLng === null) return;
+    if (!currentEgg || !currentSessionEgg || userLat === null || userLng === null) return;
 
-    const dist = distanceMeters(userLat, userLng, currentWaypoint.lat, currentWaypoint.lng);
+    const dist = distanceMeters(userLat, userLng, currentEgg.lat, currentEgg.lng);
     if (dist <= PROXIMITY_RADIUS_M && !collected) {
       setShowEgg(true);
-      setCurrentCode(currentWaypoint.code);
+      setCurrentCode(currentSessionEgg.code);
     } else if (dist > PROXIMITY_RADIUS_M * 2) {
-      // Hide if they walk away
       setShowEgg(false);
     }
-  }, [userLat, userLng, currentWaypoint, collected]);
+  }, [userLat, userLng, currentEgg, currentSessionEgg, collected]);
 
   // --- Egg animation ---
   useEffect(() => {
     if (!showEgg) return;
 
-    // Spin
     const spin = Animated.loop(
-      Animated.timing(spinAnim, {
-        toValue: 1,
-        duration: 3000,
-        useNativeDriver: true,
-      })
+      Animated.timing(spinAnim, { toValue: 1, duration: 3000, useNativeDriver: true })
     );
-
-    // Bounce
     const bounce = Animated.loop(
       Animated.sequence([
         Animated.timing(bounceAnim, { toValue: -20, duration: 800, useNativeDriver: true }),
@@ -179,7 +178,6 @@ export default function App() {
 
     spin.start();
     bounce.start();
-
     return () => { spin.stop(); bounce.stop(); };
   }, [showEgg]);
 
@@ -190,27 +188,25 @@ export default function App() {
 
   // --- Collect egg ---
   async function collectEgg() {
-    if (!currentWaypoint || !game) return;
+    if (!currentSessionEgg || !game) return;
 
     await supabase
-      .from('waypoints')
+      .from('session_eggs')
       .update({ collected: true })
-      .eq('id', currentWaypoint.id);
+      .eq('id', currentSessionEgg.id);
 
     setCollected(true);
     setShowEgg(false);
   }
 
   // --- Render ---
-  const screenW = Dimensions.get('window').width;
-
   if (!game) {
     return (
       <View style={styles.center}>
         <Text style={styles.title}>🥚 Pjak</Text>
-        <Text style={styles.subtitle}>Waiting for game...</Text>
+        <Text style={styles.subtitle}>Väntar på spel...</Text>
         <TouchableOpacity style={styles.btn} onPress={loadGame}>
-          <Text style={styles.btnText}>Refresh</Text>
+          <Text style={styles.btnText}>Uppdatera</Text>
         </TouchableOpacity>
         <StatusBar style="light" />
       </View>
@@ -222,24 +218,22 @@ export default function App() {
       <View style={styles.center}>
         <Text style={styles.title}>🎉 Grattis!</Text>
         <Text style={styles.subtitle}>Du hittade alla ägg!</Text>
+        <TouchableOpacity style={styles.btn} onPress={loadGame}>
+          <Text style={styles.btnText}>Kolla efter nytt spel</Text>
+        </TouchableOpacity>
         <StatusBar style="light" />
       </View>
     );
   }
 
-  // Egg overlay
+  // Egg found overlay
   if (showEgg && !collected) {
     return (
       <View style={styles.eggContainer}>
         <Animated.View
           style={[
             styles.eggWrapper,
-            {
-              transform: [
-                { translateY: bounceAnim },
-                { rotateY: spinInterpolate },
-              ],
-            },
+            { transform: [{ translateY: bounceAnim }, { rotateY: spinInterpolate }] },
           ]}
         >
           <Text style={styles.egg}>🥚</Text>
@@ -269,20 +263,17 @@ export default function App() {
   }
 
   // Map view
-  const initialRegion = currentWaypoint
-    ? {
-        latitude: currentWaypoint.lat,
-        longitude: currentWaypoint.lng,
-        latitudeDelta: 0.005,
-        longitudeDelta: 0.005,
-      }
+  const initialRegion = currentEgg
+    ? { latitude: currentEgg.lat, longitude: currentEgg.lng, latitudeDelta: 0.005, longitudeDelta: 0.005 }
     : userLat && userLng
     ? { latitude: userLat, longitude: userLng, latitudeDelta: 0.01, longitudeDelta: 0.01 }
     : { latitude: 59.33, longitude: 18.07, latitudeDelta: 0.05, longitudeDelta: 0.05 };
 
-  const dist = currentWaypoint && userLat && userLng
-    ? distanceMeters(userLat, userLng, currentWaypoint.lat, currentWaypoint.lng)
+  const dist = currentEgg && userLat && userLng
+    ? distanceMeters(userLat, userLng, currentEgg.lat, currentEgg.lng)
     : null;
+
+  const collectedCount = sessionEggs.filter(se => se.collected).length;
 
   return (
     <View style={styles.container}>
@@ -293,20 +284,19 @@ export default function App() {
         showsUserLocation
         showsMyLocationButton
       >
-        {currentWaypoint && (
+        {currentEgg && (
           <Marker
-            coordinate={{ latitude: currentWaypoint.lat, longitude: currentWaypoint.lng }}
-            title={currentWaypoint.label}
+            coordinate={{ latitude: currentEgg.lat, longitude: currentEgg.lng }}
+            title={currentEgg.label}
             description="Nästa ägg!"
             pinColor="#FF6B35"
           />
         )}
       </MapView>
 
-      {/* Bottom info bar */}
       <View style={styles.infoBar}>
         <Text style={styles.infoTitle}>
-          🥚 {currentWaypoint?.label || 'Laddar...'}
+          🥚 {currentEgg?.label || 'Laddar...'}
         </Text>
         {dist !== null && (
           <Text style={styles.infoDistance}>
@@ -314,7 +304,7 @@ export default function App() {
           </Text>
         )}
         <Text style={styles.infoHint}>
-          Ägg {(game.current_waypoint_index || 0) + 1} av {waypoints.length}
+          Ägg {collectedCount} av {sessionEggs.length} hittade
         </Text>
       </View>
 
@@ -327,61 +317,36 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { flex: 1 },
   center: {
-    flex: 1,
-    backgroundColor: '#1a1a2e',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 32,
+    flex: 1, backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center', padding: 32,
   },
   title: { fontSize: 48, color: '#fff', fontWeight: 'bold' },
   subtitle: { fontSize: 20, color: '#aaa', marginTop: 12 },
   hint: { fontSize: 16, color: '#ffd700', marginTop: 20, textAlign: 'center' },
   btn: {
-    marginTop: 24,
-    backgroundColor: '#FF6B35',
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 12,
+    marginTop: 24, backgroundColor: '#FF6B35', paddingHorizontal: 32, paddingVertical: 14, borderRadius: 12,
   },
   btnText: { color: '#fff', fontSize: 18, fontWeight: '600' },
   infoBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(26,26,46,0.95)',
-    padding: 20,
-    paddingBottom: 40,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    backgroundColor: 'rgba(26,26,46,0.95)', padding: 20, paddingBottom: 40,
+    borderTopLeftRadius: 20, borderTopRightRadius: 20,
   },
   infoTitle: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
   infoDistance: { color: '#FF6B35', fontSize: 32, fontWeight: 'bold', marginTop: 4 },
   infoHint: { color: '#888', fontSize: 14, marginTop: 6 },
   eggContainer: {
-    flex: 1,
-    backgroundColor: '#1a1a2e',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flex: 1, backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center',
   },
   eggWrapper: { alignItems: 'center' },
   egg: { fontSize: 120 },
   codeBox: {
-    marginTop: 20,
-    backgroundColor: '#ffd700',
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 16,
-    alignItems: 'center',
+    marginTop: 20, backgroundColor: '#ffd700', paddingHorizontal: 32, paddingVertical: 16,
+    borderRadius: 16, alignItems: 'center',
   },
   codeLabel: { fontSize: 14, color: '#333', fontWeight: '600' },
   codeText: { fontSize: 48, color: '#1a1a2e', fontWeight: 'bold', letterSpacing: 8 },
   collectBtn: {
-    marginTop: 40,
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 48,
-    paddingVertical: 16,
-    borderRadius: 16,
+    marginTop: 40, backgroundColor: '#4CAF50', paddingHorizontal: 48, paddingVertical: 16, borderRadius: 16,
   },
   collectBtnText: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
 });
