@@ -1,6 +1,38 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, useMapEvents, Circle } from 'react-leaflet';
+import L from 'leaflet';
 import { supabase } from './supabase';
+import 'leaflet/dist/leaflet.css';
 import './App.css';
+
+// Fix Leaflet default marker icons
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+});
+
+const eggIcon = new L.DivIcon({
+  html: '<div style="font-size:28px;text-align:center">🥚</div>',
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
+  className: '',
+});
+
+const playerIcon = new L.DivIcon({
+  html: '<div style="font-size:24px;text-align:center">📍</div>',
+  iconSize: [28, 28],
+  iconAnchor: [14, 14],
+  className: '',
+});
+
+const collectedIcon = new L.DivIcon({
+  html: '<div style="font-size:28px;text-align:center">✅</div>',
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
+  className: '',
+});
 
 type Waypoint = {
   id: string;
@@ -20,6 +52,25 @@ type Game = {
 };
 
 type PlayerPos = { lat: number; lng: number };
+type NewWaypoint = { label: string; lat: number; lng: number; code: string };
+
+// Auto-generate a random code with letters and numbers
+function randomCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I/O/0/1 to avoid confusion
+  let code = '';
+  for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
+}
+
+// Map click handler component
+function MapClickHandler({ onMapClick }: { onMapClick: (lat: number, lng: number) => void }) {
+  useMapEvents({
+    click(e) {
+      onMapClick(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return null;
+}
 
 function App() {
   const [game, setGame] = useState<Game | null>(null);
@@ -28,9 +79,8 @@ function App() {
   const [codeInput, setCodeInput] = useState('');
   const [message, setMessage] = useState('');
   const [setupMode, setSetupMode] = useState(false);
-  const [newWaypoints, setNewWaypoints] = useState<Array<{ label: string; lat: string; lng: string; code: string }>>([
-    { label: '', lat: '', lng: '', code: '' },
-  ]);
+  const [newWaypoints, setNewWaypoints] = useState<NewWaypoint[]>([]);
+  const [editingLabel, setEditingLabel] = useState<number | null>(null);
 
   // --- Load game ---
   useEffect(() => {
@@ -86,11 +136,26 @@ function App() {
     return () => { supabase.removeChannel(channel); };
   }, [game?.id]);
 
+  // --- Map click: add egg ---
+  function handleMapClick(lat: number, lng: number) {
+    if (!setupMode && !game) setSetupMode(true);
+    if (setupMode || !game) {
+      const wp: NewWaypoint = {
+        label: `Ägg ${newWaypoints.length + 1}`,
+        lat,
+        lng,
+        code: randomCode(),
+      };
+      setNewWaypoints([...newWaypoints, wp]);
+      setEditingLabel(newWaypoints.length);
+    }
+  }
+
   // --- Create new game ---
   async function createGame() {
-    const validWps = newWaypoints.filter(w => w.label && w.lat && w.lng && w.code);
-    if (validWps.length === 0) {
-      setMessage('Lägg till minst en waypoint!');
+    if (newWaypoints.length === 0) {
+      setMessage('Klicka på kartan för att placera ägg!');
+      setTimeout(() => setMessage(''), 3000);
       return;
     }
 
@@ -105,19 +170,17 @@ function App() {
       return;
     }
 
-    const wps = validWps.map((w, i) => ({
+    const wps = newWaypoints.map((w, i) => ({
       game_id: newGame.id,
       idx: i,
       label: w.label,
-      lat: parseFloat(w.lat),
-      lng: parseFloat(w.lng),
+      lat: w.lat,
+      lng: w.lng,
       code: w.code,
       collected: false,
     }));
 
     await supabase.from('waypoints').insert(wps);
-
-    // Create player position row
     await supabase.from('player_position').insert({
       game_id: newGame.id,
       lat: 0,
@@ -125,6 +188,8 @@ function App() {
     });
 
     setSetupMode(false);
+    setNewWaypoints([]);
+    setEditingLabel(null);
     loadGame();
   }
 
@@ -136,7 +201,6 @@ function App() {
     if (!current) return;
 
     if (codeInput.trim().toUpperCase() === current.code.toUpperCase()) {
-      // Correct! Advance to next waypoint
       const nextIdx = game.current_waypoint_index + 1;
       const isFinished = nextIdx >= waypoints.length;
 
@@ -151,12 +215,41 @@ function App() {
       setGame({ ...game, current_waypoint_index: nextIdx, status: isFinished ? 'finished' : 'active' });
       setCodeInput('');
       setMessage(isFinished ? '🎉 Alla ägg hittade! Grattis!' : '✅ Rätt kod! Nästa ägg skickat till telefonen.');
-
       setTimeout(() => setMessage(''), 4000);
     } else {
       setMessage('❌ Fel kod! Försök igen.');
       setTimeout(() => setMessage(''), 3000);
     }
+  }
+
+  // --- Remove egg from active game ---
+  async function removeWaypoint(wp: Waypoint) {
+    if (!game) return;
+    await supabase.from('waypoints').delete().eq('id', wp.id);
+
+    // Re-index remaining waypoints
+    const remaining = waypoints.filter(w => w.id !== wp.id);
+    for (let i = 0; i < remaining.length; i++) {
+      if (remaining[i].idx !== i) {
+        await supabase.from('waypoints').update({ idx: i }).eq('id', remaining[i].id);
+      }
+    }
+
+    // Adjust current_waypoint_index if needed
+    const newIdx = Math.min(game.current_waypoint_index, remaining.length - 1);
+    if (newIdx !== game.current_waypoint_index || remaining.length === 0) {
+      const status = remaining.length === 0 ? 'finished' : game.status;
+      await supabase.from('games').update({ current_waypoint_index: Math.max(0, newIdx), status }).eq('id', game.id);
+      setGame({ ...game, current_waypoint_index: Math.max(0, newIdx), status });
+    }
+
+    // Reload
+    const { data: wps } = await supabase
+      .from('waypoints')
+      .select('*')
+      .eq('game_id', game.id)
+      .order('idx');
+    if (wps) setWaypoints(wps);
   }
 
   // --- Distance helper ---
@@ -169,131 +262,206 @@ function App() {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   }
 
-  // --- Setup mode ---
+  // Default map center (Stockholm, will be overridden)
+  const defaultCenter: [number, number] = [59.33, 18.07];
+
+  // --- SETUP MODE ---
   if (setupMode || !game) {
     return (
-      <div className="dashboard">
-        <h1>🥚 Pjak — Skapa Påskjakt</h1>
-        <div className="setup">
-          {newWaypoints.map((wp, i) => (
-            <div key={i} className="wp-row">
-              <span className="wp-num">Ägg {i + 1}</span>
-              <input
-                placeholder="Plats (t.ex. Storgatan 5)"
-                value={wp.label}
-                onChange={e => {
-                  const copy = [...newWaypoints];
-                  copy[i].label = e.target.value;
-                  setNewWaypoints(copy);
-                }}
+      <div className="dashboard full">
+        <div className="setup-header">
+          <h1>🥚 Pjak — Skapa Påskjakt</h1>
+          <p className="setup-hint">Klicka på kartan för att placera ägg. Koder genereras automatiskt.</p>
+        </div>
+
+        <div className="setup-layout">
+          <div className="map-container">
+            <MapContainer center={defaultCenter} zoom={15} style={{ height: '100%', width: '100%' }}>
+              <TileLayer
+                attribution='&copy; OpenStreetMap'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
-              <input
-                placeholder="Lat"
-                value={wp.lat}
-                onChange={e => {
-                  const copy = [...newWaypoints];
-                  copy[i].lat = e.target.value;
-                  setNewWaypoints(copy);
-                }}
-              />
-              <input
-                placeholder="Lng"
-                value={wp.lng}
-                onChange={e => {
-                  const copy = [...newWaypoints];
-                  copy[i].lng = e.target.value;
-                  setNewWaypoints(copy);
-                }}
-              />
-              <input
-                placeholder="Kod (t.ex. 4782)"
-                value={wp.code}
-                onChange={e => {
-                  const copy = [...newWaypoints];
-                  copy[i].code = e.target.value;
-                  setNewWaypoints(copy);
-                }}
-              />
-              {newWaypoints.length > 1 && (
-                <button className="remove-btn" onClick={() => setNewWaypoints(newWaypoints.filter((_, j) => j !== i))}>✕</button>
+              <MapClickHandler onMapClick={handleMapClick} />
+              {newWaypoints.map((wp, i) => (
+                <Marker key={i} position={[wp.lat, wp.lng]} icon={eggIcon}>
+                  <Popup>
+                    <strong>{wp.label}</strong><br />
+                    Kod: <code>{wp.code}</code>
+                  </Popup>
+                </Marker>
+              ))}
+            </MapContainer>
+          </div>
+
+          <div className="setup-sidebar">
+            <h3>Placerade ägg ({newWaypoints.length})</h3>
+            <div className="egg-list">
+              {newWaypoints.map((wp, i) => (
+                <div key={i} className="egg-item">
+                  <div className="egg-item-header">
+                    <span className="egg-num">🥚 {i + 1}</span>
+                    <button className="remove-btn" onClick={() => {
+                      setNewWaypoints(newWaypoints.filter((_, j) => j !== i));
+                    }}>✕</button>
+                  </div>
+                  {editingLabel === i ? (
+                    <input
+                      className="label-input"
+                      value={wp.label}
+                      autoFocus
+                      onChange={e => {
+                        const copy = [...newWaypoints];
+                        copy[i].label = e.target.value;
+                        setNewWaypoints(copy);
+                      }}
+                      onBlur={() => setEditingLabel(null)}
+                      onKeyDown={e => e.key === 'Enter' && setEditingLabel(null)}
+                      placeholder="Namnge platsen..."
+                    />
+                  ) : (
+                    <div className="label-display" onClick={() => setEditingLabel(i)}>
+                      {wp.label} <span className="edit-hint">✏️</span>
+                    </div>
+                  )}
+                  <div className="egg-code">
+                    Kod: <input
+                      className="code-edit-input"
+                      value={wp.code}
+                      onChange={e => {
+                        const copy = [...newWaypoints];
+                        copy[i].code = e.target.value.toUpperCase();
+                        setNewWaypoints(copy);
+                      }}
+                      placeholder="Kod eller ord..."
+                    />
+                  </div>
+                  <div className="egg-coords">{wp.lat.toFixed(5)}, {wp.lng.toFixed(5)}</div>
+                </div>
+              ))}
+              {newWaypoints.length === 0 && (
+                <p className="empty-hint">👆 Klicka på kartan för att placera ditt första ägg</p>
               )}
             </div>
-          ))}
-          <button className="add-btn" onClick={() => setNewWaypoints([...newWaypoints, { label: '', lat: '', lng: '', code: '' }])}>
-            + Lägg till ägg
-          </button>
-          <button className="start-btn" onClick={createGame}>🚀 Starta Jakt!</button>
-          {message && <p className="msg">{message}</p>}
+            {newWaypoints.length > 0 && (
+              <button className="start-btn" onClick={createGame}>
+                🚀 Starta Jakt! ({newWaypoints.length} ägg)
+              </button>
+            )}
+            {message && <p className="msg">{message}</p>}
+          </div>
         </div>
       </div>
     );
   }
 
-  // --- Game view ---
+  // --- GAME VIEW ---
   const current = waypoints.find(w => w.idx === game.current_waypoint_index);
-  const playerDist = current && playerPos
+  const playerDist = current && playerPos && playerPos.lat !== 0
     ? distanceM(playerPos.lat, playerPos.lng, current.lat, current.lng)
     : null;
 
+  const mapCenter: [number, number] = current
+    ? [current.lat, current.lng]
+    : defaultCenter;
+
   return (
-    <div className="dashboard">
-      <h1>🥚 Pjak — Påskjakt</h1>
+    <div className="dashboard full">
+      <div className="game-header">
+        <h1>🥚 Pjak — Påskjakt</h1>
+      </div>
 
       {game.status === 'finished' ? (
         <div className="finished">
           <h2>🎉 Grattis! Alla ägg hittade!</h2>
-          <button className="start-btn" onClick={() => { setSetupMode(true); setGame(null); }}>
+          <button className="start-btn" onClick={() => { setSetupMode(true); setGame(null); setNewWaypoints([]); }}>
             Ny jakt
           </button>
         </div>
       ) : (
-        <div className="game-view">
-          {/* Progress */}
-          <div className="progress">
-            {waypoints.map((wp, i) => (
-              <div
-                key={wp.id}
-                className={`progress-egg ${wp.collected ? 'collected' : ''} ${i === game.current_waypoint_index ? 'current' : ''}`}
-              >
-                {wp.collected ? '✅' : '🥚'} {wp.label}
-              </div>
-            ))}
-          </div>
-
-          {/* Current target */}
-          <div className="target-card">
-            <h2>Nästa ägg: {current?.label}</h2>
-            {playerPos && playerDist !== null && (
-              <div className="distance">
-                <span className="dist-value">
-                  {playerDist < 1000 ? `${Math.round(playerDist)} m` : `${(playerDist / 1000).toFixed(1)} km`}
-                </span>
-                <span className="dist-label">från ägget</span>
-              </div>
-            )}
-            {playerPos && playerDist !== null && playerDist < 50 && (
-              <div className="close-alert">📍 Spelaren är nära!</div>
-            )}
-          </div>
-
-          {/* Code input */}
-          <div className="code-input-section">
-            <h3>Skriv in koden från ägget:</h3>
-            <div className="code-input-row">
-              <input
-                className="code-input"
-                type="text"
-                value={codeInput}
-                onChange={e => setCodeInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && submitCode()}
-                placeholder="Kod..."
-                autoFocus
+        <div className="game-layout">
+          <div className="map-container">
+            <MapContainer center={mapCenter} zoom={16} style={{ height: '100%', width: '100%' }}>
+              <TileLayer
+                attribution='&copy; OpenStreetMap'
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
-              <button className="submit-btn" onClick={submitCode}>Bekräfta</button>
-            </div>
+              {/* All egg markers */}
+              {waypoints.map((wp) => (
+                <Marker
+                  key={wp.id}
+                  position={[wp.lat, wp.lng]}
+                  icon={wp.collected ? collectedIcon : eggIcon}
+                  opacity={wp.idx === game.current_waypoint_index ? 1 : 0.4}
+                >
+                  <Popup>{wp.label} {wp.collected ? '(hittad!)' : ''}</Popup>
+                </Marker>
+              ))}
+              {/* Proximity circle for current egg */}
+              {current && (
+                <Circle
+                  center={[current.lat, current.lng]}
+                  radius={15}
+                  pathOptions={{ color: '#FF6B35', fillOpacity: 0.1 }}
+                />
+              )}
+              {/* Player position */}
+              {playerPos && playerPos.lat !== 0 && (
+                <Marker position={[playerPos.lat, playerPos.lng]} icon={playerIcon}>
+                  <Popup>Spelaren</Popup>
+                </Marker>
+              )}
+            </MapContainer>
           </div>
 
-          {message && <p className={`msg ${message.startsWith('✅') || message.startsWith('🎉') ? 'success' : 'error'}`}>{message}</p>}
+          <div className="game-sidebar">
+            {/* Progress */}
+            <div className="progress">
+              {waypoints.map((wp, i) => (
+                <div
+                  key={wp.id}
+                  className={`progress-egg ${wp.collected ? 'collected' : ''} ${i === game.current_waypoint_index ? 'current' : ''}`}
+                >
+                  <span>{wp.collected ? '✅' : '🥚'} {wp.label}</span>
+                  <button className="remove-btn-sm" onClick={() => removeWaypoint(wp)} title="Ta bort">✕</button>
+                </div>
+              ))}
+            </div>
+
+            {/* Current target */}
+            <div className="target-card">
+              <h2>{current?.label}</h2>
+              {playerDist !== null && (
+                <div className="distance">
+                  <span className="dist-value">
+                    {playerDist < 1000 ? `${Math.round(playerDist)} m` : `${(playerDist / 1000).toFixed(1)} km`}
+                  </span>
+                  <span className="dist-label">från ägget</span>
+                </div>
+              )}
+              {playerDist !== null && playerDist < 50 && (
+                <div className="close-alert">📍 Spelaren är nära!</div>
+              )}
+            </div>
+
+            {/* Code input */}
+            <div className="code-input-section">
+              <h3>Skriv in koden:</h3>
+              <div className="code-input-row">
+                <input
+                  className="code-input"
+                  type="text"
+                  value={codeInput}
+                  onChange={e => setCodeInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && submitCode()}
+                  placeholder="Kod..."
+                  autoFocus
+                />
+                <button className="submit-btn" onClick={submitCode}>OK</button>
+              </div>
+            </div>
+
+            {message && <p className={`msg ${message.startsWith('✅') || message.startsWith('🎉') ? 'success' : 'error'}`}>{message}</p>}
+          </div>
         </div>
       )}
     </div>

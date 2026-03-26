@@ -9,118 +9,219 @@ body {
   background: #1a1a2e;
   color: #fff;
   min-height: 100vh;
+  overflow: hidden;
 }
 
-.dashboard {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 40px 24px;
+.dashboard.full {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 h1 {
-  font-size: 36px;
-  margin-bottom: 32px;
+  font-size: 28px;
   text-align: center;
 }
 
-/* Setup mode */
-.setup {
+/* Setup header */
+.setup-header, .game-header {
+  padding: 12px 24px;
+  background: rgba(0, 0, 0, 0.3);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.setup-header h1, .game-header h1 {
+  margin-bottom: 4px;
+}
+
+.setup-hint {
+  text-align: center;
+  color: #888;
+  font-size: 14px;
+}
+
+/* Layout: map + sidebar */
+.setup-layout, .game-layout {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.map-container {
+  flex: 1;
+  position: relative;
+}
+
+.setup-sidebar, .game-sidebar {
+  width: 320px;
+  background: rgba(0, 0, 0, 0.2);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 16px;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.wp-row {
+.setup-sidebar h3 {
+  color: #ffd700;
+  font-size: 16px;
+}
+
+/* Egg list in setup */
+.egg-list {
+  flex: 1;
   display: flex;
-  gap: 8px;
-  align-items: center;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
+
+.egg-item {
   background: rgba(255, 255, 255, 0.05);
   padding: 12px;
-  border-radius: 12px;
+  border-radius: 10px;
 }
 
-.wp-num {
+.egg-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.egg-num {
   font-weight: 600;
-  min-width: 60px;
   color: #ffd700;
-}
-
-.wp-row input {
-  flex: 1;
-  padding: 10px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
-  font-size: 14px;
-}
-
-.wp-row input:focus {
-  outline: none;
-  border-color: #FF6B35;
 }
 
 .remove-btn {
   background: rgba(255, 50, 50, 0.3);
   border: none;
   color: #ff6b6b;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
   cursor: pointer;
-  font-size: 16px;
+  font-size: 12px;
 }
 
-.add-btn {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px dashed rgba(255, 255, 255, 0.2);
-  color: #aaa;
-  padding: 14px;
-  border-radius: 12px;
-  cursor: pointer;
-  font-size: 16px;
-}
-
-.add-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
+.label-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #FF6B35;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.3);
   color: #fff;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.label-input:focus {
+  outline: none;
+}
+
+.label-display {
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 0;
+  margin-bottom: 4px;
+}
+
+.label-display:hover {
+  color: #FF6B35;
+}
+
+.edit-hint {
+  font-size: 12px;
+  opacity: 0.5;
+}
+
+.egg-code {
+  font-size: 13px;
+  color: #ffd700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.code-edit-input {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  border-radius: 4px;
+  color: #ffd700;
+  font-weight: bold;
+  font-size: 13px;
+  padding: 3px 6px;
+  width: 80px;
+  text-transform: uppercase;
+}
+
+.code-edit-input:focus {
+  outline: none;
+  border-color: #ffd700;
+}
+
+.remove-btn-sm {
+  background: none;
+  border: none;
+  color: #ff6b6b;
+  cursor: pointer;
+  font-size: 11px;
+  opacity: 0.4;
+  padding: 2px 6px;
+  margin-left: auto;
+}
+
+.remove-btn-sm:hover {
+  opacity: 1;
+}
+
+.egg-coords {
+  font-size: 11px;
+  color: #666;
+  margin-top: 2px;
+}
+
+.empty-hint {
+  color: #666;
+  text-align: center;
+  padding: 40px 16px;
+  font-size: 14px;
 }
 
 .start-btn {
   background: #FF6B35;
   border: none;
   color: #fff;
-  padding: 16px 32px;
+  padding: 14px 24px;
   border-radius: 12px;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
   cursor: pointer;
-  margin-top: 8px;
+  width: 100%;
 }
 
 .start-btn:hover {
   background: #e55a25;
 }
 
-/* Game view */
-.game-view {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
+/* Progress */
 .progress {
   display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .progress-egg {
   background: rgba(255, 255, 255, 0.08);
-  padding: 8px 16px;
-  border-radius: 10px;
-  font-size: 14px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
   transition: all 0.3s;
+  display: flex;
+  align-items: center;
 }
 
 .progress-egg.collected {
@@ -134,44 +235,45 @@ h1 {
   color: #FF6B35;
 }
 
+/* Target card */
 .target-card {
   background: rgba(255, 255, 255, 0.06);
-  border-radius: 16px;
-  padding: 32px;
+  border-radius: 12px;
+  padding: 20px;
   text-align: center;
 }
 
 .target-card h2 {
-  font-size: 28px;
-  margin-bottom: 16px;
+  font-size: 20px;
+  margin-bottom: 8px;
 }
 
 .distance {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
 }
 
 .dist-value {
-  font-size: 56px;
+  font-size: 42px;
   font-weight: 800;
   color: #FF6B35;
 }
 
 .dist-label {
-  font-size: 16px;
+  font-size: 14px;
   color: #888;
 }
 
 .close-alert {
-  margin-top: 16px;
+  margin-top: 12px;
   background: rgba(76, 175, 80, 0.2);
   color: #4CAF50;
-  padding: 12px 24px;
-  border-radius: 10px;
+  padding: 10px 16px;
+  border-radius: 8px;
   font-weight: 600;
-  font-size: 18px;
+  font-size: 16px;
   animation: pulse 1.5s infinite;
 }
 
@@ -184,33 +286,34 @@ h1 {
 .code-input-section {
   background: rgba(255, 215, 0, 0.08);
   border: 1px solid rgba(255, 215, 0, 0.2);
-  border-radius: 16px;
-  padding: 24px;
+  border-radius: 12px;
+  padding: 16px;
   text-align: center;
 }
 
 .code-input-section h3 {
-  margin-bottom: 16px;
+  margin-bottom: 10px;
   color: #ffd700;
+  font-size: 15px;
 }
 
 .code-input-row {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   justify-content: center;
 }
 
 .code-input {
-  font-size: 32px;
+  font-size: 24px;
   font-weight: bold;
   text-align: center;
-  letter-spacing: 8px;
-  padding: 16px 24px;
+  letter-spacing: 6px;
+  padding: 12px 16px;
   border: 2px solid rgba(255, 215, 0, 0.3);
-  border-radius: 12px;
+  border-radius: 10px;
   background: rgba(0, 0, 0, 0.3);
   color: #ffd700;
-  width: 240px;
+  width: 180px;
 }
 
 .code-input:focus {
@@ -222,9 +325,9 @@ h1 {
   background: #4CAF50;
   border: none;
   color: #fff;
-  padding: 16px 32px;
-  border-radius: 12px;
-  font-size: 18px;
+  padding: 12px 20px;
+  border-radius: 10px;
+  font-size: 16px;
   font-weight: 600;
   cursor: pointer;
 }
@@ -236,9 +339,9 @@ h1 {
 /* Messages */
 .msg {
   text-align: center;
-  padding: 16px;
-  border-radius: 12px;
-  font-size: 18px;
+  padding: 12px;
+  border-radius: 10px;
+  font-size: 15px;
   font-weight: 600;
 }
 
@@ -255,7 +358,12 @@ h1 {
 /* Finished */
 .finished {
   text-align: center;
-  padding: 60px 0;
+  padding: 60px 24px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .finished h2 {
