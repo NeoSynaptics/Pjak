@@ -1,182 +1,105 @@
 /**
- * Pjak SDK — Drop into any app to add påskäggsjakt functionality.
- * v2: Permanent eggs, replayable sessions with fresh codes.
+ * Pjak SDK — Local-only påskäggsjakt game logic.
+ * No database, no networking. Just eggs, codes, and proximity.
  *
  * Usage:
- *   import { PjakGame } from 'pjak-sdk';
- *   const pjak = new PjakGame(supabaseUrl, supabaseKey);
- *   await pjak.connectLatest();
- *   pjak.on('eggFound', (egg, code) => { ... });
- *   pjak.updatePlayerPosition(lat, lng);
+ *   import { PjakGame } from './pjak-sdk';
+ *   import eggs from '../shared/eggs.json';
+ *
+ *   const game = new PjakGame(eggs);
+ *   game.start();
+ *   game.on('eggFound', (egg, code) => { ... });
+ *   game.updatePlayerPosition(lat, lng);
  */
 
-import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
-
 export type Egg = {
-  id: string;
-  idx: number;
+  id: number;
   label: string;
   lat: number;
   lng: number;
 };
 
-export type SessionEgg = {
-  id: string;
-  game_id: string;
-  egg_id: string;
-  idx: number;
+export type SessionEgg = Egg & {
   code: string;
   collected: boolean;
 };
 
-export type Game = {
-  id: string;
-  name: string;
-  current_egg_index: number;
-  status: 'waiting' | 'active' | 'finished';
-};
-
 export type PjakEvents = {
-  gameUpdate: (game: Game) => void;
-  eggsLoaded: (eggs: Egg[]) => void;
-  sessionUpdate: (sessionEggs: SessionEgg[]) => void;
-  currentEgg: (egg: Egg | null, sessionEgg: SessionEgg | null) => void;
+  start: (sessionEggs: SessionEgg[]) => void;
   proximity: (distance: number, isInRange: boolean) => void;
-  eggFound: (egg: Egg, code: string) => void;
-  gameFinished: () => void;
+  eggFound: (egg: SessionEgg, code: string) => void;
+  eggCollected: (egg: SessionEgg, nextEgg: SessionEgg | null) => void;
+  gameFinished: (sessionEggs: SessionEgg[]) => void;
 };
 
 export class PjakGame {
-  private supabase: SupabaseClient;
-  private channel: RealtimeChannel | null = null;
-  private game: Game | null = null;
-  private eggs: Egg[] = [];
-  private sessionEggs: SessionEgg[] = [];
-  private listeners: Partial<{ [K in keyof PjakEvents]: PjakEvents[K][] }> = {};
+  private eggs: Egg[];
+  private session: SessionEgg[] = [];
+  private currentIdx = 0;
   private proximityRadius: number;
+  private listeners: Partial<{ [K in keyof PjakEvents]: PjakEvents[K][] }> = {};
 
-  constructor(supabaseUrl: string, supabaseKey: string, proximityRadius = 15) {
-    this.supabase = createClient(supabaseUrl, supabaseKey);
+  constructor(eggs: Egg[], proximityRadius = 15) {
+    this.eggs = eggs;
     this.proximityRadius = proximityRadius;
   }
 
-  // --- Load permanent eggs ---
-  async loadEggs(): Promise<Egg[]> {
-    const { data } = await this.supabase.from('eggs').select('*').order('idx');
-    this.eggs = data || [];
-    this.emit('eggsLoaded', this.eggs);
-    return this.eggs;
+  // --- Start a new session (generates fresh codes) ---
+  start(): SessionEgg[] {
+    this.session = this.eggs.map(e => ({
+      ...e,
+      code: this.randomCode(),
+      collected: false,
+    }));
+    this.currentIdx = 0;
+    this.emit('start', this.session);
+    return this.session;
   }
 
-  // --- Connect to a game session ---
-  async connect(gameId: string): Promise<Game | null> {
-    await this.loadEggs();
+  // --- Feed GPS position ---
+  updatePlayerPosition(lat: number, lng: number): void {
+    const current = this.session[this.currentIdx];
+    if (!current || current.collected) return;
 
-    const { data: game } = await this.supabase
-      .from('games')
-      .select('*')
-      .eq('id', gameId)
-      .single();
+    const dist = this.distanceMeters(lat, lng, current.lat, current.lng);
+    const inRange = dist <= this.proximityRadius;
+    this.emit('proximity', dist, inRange);
 
-    if (!game) return null;
-    this.game = game;
-
-    const { data: ses } = await this.supabase
-      .from('session_eggs')
-      .select('*')
-      .eq('game_id', gameId)
-      .order('idx');
-    this.sessionEggs = ses || [];
-
-    // Subscribe to realtime
-    this.channel = this.supabase
-      .channel(`pjak-${gameId}`)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'games', filter: `id=eq.${gameId}` },
-        (payload) => {
-          this.game = payload.new as Game;
-          this.emit('gameUpdate', this.game);
-          this.emitCurrentEgg();
-          if (this.game.status === 'finished') this.emit('gameFinished');
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'session_eggs', filter: `game_id=eq.${gameId}` },
-        async () => {
-          const { data } = await this.supabase
-            .from('session_eggs')
-            .select('*')
-            .eq('game_id', gameId)
-            .order('idx');
-          this.sessionEggs = data || [];
-          this.emit('sessionUpdate', this.sessionEggs);
-          this.emitCurrentEgg();
-        }
-      )
-      .subscribe();
-
-    return this.game;
-  }
-
-  // --- Connect to latest active game ---
-  async connectLatest(): Promise<Game | null> {
-    const { data: games } = await this.supabase
-      .from('games')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(1);
-
-    if (!games || games.length === 0) return null;
-    return this.connect(games[0].id);
-  }
-
-  // --- Update player GPS ---
-  async updatePlayerPosition(lat: number, lng: number): Promise<void> {
-    if (this.game) {
-      await this.supabase.from('player_position').upsert(
-        { game_id: this.game.id, lat, lng, updated_at: new Date().toISOString() },
-        { onConflict: 'game_id' }
-      );
-    }
-
-    // Check proximity
-    const { egg } = this.getCurrentEgg();
-    if (egg) {
-      const dist = this.distanceMeters(lat, lng, egg.lat, egg.lng);
-      const inRange = dist <= this.proximityRadius;
-      this.emit('proximity', dist, inRange);
-
-      if (inRange) {
-        const se = this.getCurrentSessionEgg();
-        if (se) this.emit('eggFound', egg, se.code);
-      }
+    if (inRange) {
+      this.emit('eggFound', current, current.code);
     }
   }
 
-  // --- Get current egg ---
-  getCurrentEgg(): { egg: Egg | null; sessionEgg: SessionEgg | null } {
-    if (!this.game) return { egg: null, sessionEgg: null };
-    const se = this.sessionEggs.find(s => s.idx === this.game!.current_egg_index);
-    const egg = se ? this.eggs.find(e => e.id === se.egg_id) || null : null;
-    return { egg, sessionEgg: se || null };
+  // --- Collect current egg ---
+  collect(): SessionEgg | null {
+    const current = this.session[this.currentIdx];
+    if (!current) return null;
+
+    current.collected = true;
+    this.currentIdx++;
+
+    const next = this.session[this.currentIdx] || null;
+    this.emit('eggCollected', current, next);
+
+    if (this.currentIdx >= this.session.length) {
+      this.emit('gameFinished', this.session);
+    }
+
+    return current;
   }
 
-  private getCurrentSessionEgg(): SessionEgg | null {
-    if (!this.game) return null;
-    return this.sessionEggs.find(s => s.idx === this.game!.current_egg_index) || null;
-  }
-
-  // --- Mark egg as collected ---
-  async collectEgg(sessionEggId: string): Promise<void> {
-    await this.supabase.from('session_eggs').update({ collected: true }).eq('id', sessionEggId);
+  // --- Validate a code (for Mac dashboard) ---
+  validateCode(input: string): boolean {
+    const current = this.session[this.currentIdx];
+    if (!current) return false;
+    return input.trim().toUpperCase() === current.code.toUpperCase();
   }
 
   // --- Getters ---
-  getEggs(): Egg[] { return this.eggs; }
-  getSessionEggs(): SessionEgg[] { return this.sessionEggs; }
-  getGame(): Game | null { return this.game; }
+  getCurrentEgg(): SessionEgg | null { return this.session[this.currentIdx] || null; }
+  getSession(): SessionEgg[] { return this.session; }
+  getCurrentIndex(): number { return this.currentIdx; }
+  isFinished(): boolean { return this.currentIdx >= this.session.length; }
 
   // --- Events ---
   on<K extends keyof PjakEvents>(event: K, callback: PjakEvents[K]): () => void {
@@ -194,20 +117,13 @@ export class PjakGame {
     if (cbs) cbs.forEach(cb => (cb as (...a: any[]) => void)(...args));
   }
 
-  private emitCurrentEgg(): void {
-    const { egg, sessionEgg } = this.getCurrentEgg();
-    this.emit('currentEgg', egg, sessionEgg);
+  private randomCode(): string {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    return code;
   }
 
-  // --- Disconnect ---
-  async disconnect(): Promise<void> {
-    if (this.channel) {
-      await this.supabase.removeChannel(this.channel);
-      this.channel = null;
-    }
-  }
-
-  // --- Haversine ---
   private distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
     const R = 6371000;
     const toRad = (d: number) => (d * Math.PI) / 180;
