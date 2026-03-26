@@ -17,6 +17,7 @@ body {
   height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 h1 {
@@ -50,14 +51,17 @@ h1 {
 
 .map-container {
   flex: 1;
+  min-width: 0;
   position: relative;
 }
 
 .setup-sidebar, .game-sidebar {
-  width: 320px;
+  width: 280px;
+  min-width: 280px;
+  max-width: 280px;
   background: rgba(0, 0, 0, 0.2);
   border-left: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 16px;
+  padding: 14px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
