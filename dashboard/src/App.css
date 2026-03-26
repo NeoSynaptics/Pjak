@@ -1,0 +1,264 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #1a1a2e;
+  color: #fff;
+  min-height: 100vh;
+}
+
+.dashboard {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 40px 24px;
+}
+
+h1 {
+  font-size: 36px;
+  margin-bottom: 32px;
+  text-align: center;
+}
+
+/* Setup mode */
+.setup {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.wp-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 12px;
+  border-radius: 12px;
+}
+
+.wp-num {
+  font-weight: 600;
+  min-width: 60px;
+  color: #ffd700;
+}
+
+.wp-row input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 14px;
+}
+
+.wp-row input:focus {
+  outline: none;
+  border-color: #FF6B35;
+}
+
+.remove-btn {
+  background: rgba(255, 50, 50, 0.3);
+  border: none;
+  color: #ff6b6b;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.add-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  color: #aaa;
+  padding: 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.add-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.start-btn {
+  background: #FF6B35;
+  border: none;
+  color: #fff;
+  padding: 16px 32px;
+  border-radius: 12px;
+  font-size: 20px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 8px;
+}
+
+.start-btn:hover {
+  background: #e55a25;
+}
+
+/* Game view */
+.game-view {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.progress {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.progress-egg {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  transition: all 0.3s;
+}
+
+.progress-egg.collected {
+  background: rgba(76, 175, 80, 0.2);
+  color: #4CAF50;
+}
+
+.progress-egg.current {
+  background: rgba(255, 107, 53, 0.2);
+  border: 1px solid #FF6B35;
+  color: #FF6B35;
+}
+
+.target-card {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 32px;
+  text-align: center;
+}
+
+.target-card h2 {
+  font-size: 28px;
+  margin-bottom: 16px;
+}
+
+.distance {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.dist-value {
+  font-size: 56px;
+  font-weight: 800;
+  color: #FF6B35;
+}
+
+.dist-label {
+  font-size: 16px;
+  color: #888;
+}
+
+.close-alert {
+  margin-top: 16px;
+  background: rgba(76, 175, 80, 0.2);
+  color: #4CAF50;
+  padding: 12px 24px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 18px;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* Code input */
+.code-input-section {
+  background: rgba(255, 215, 0, 0.08);
+  border: 1px solid rgba(255, 215, 0, 0.2);
+  border-radius: 16px;
+  padding: 24px;
+  text-align: center;
+}
+
+.code-input-section h3 {
+  margin-bottom: 16px;
+  color: #ffd700;
+}
+
+.code-input-row {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.code-input {
+  font-size: 32px;
+  font-weight: bold;
+  text-align: center;
+  letter-spacing: 8px;
+  padding: 16px 24px;
+  border: 2px solid rgba(255, 215, 0, 0.3);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  color: #ffd700;
+  width: 240px;
+}
+
+.code-input:focus {
+  outline: none;
+  border-color: #ffd700;
+}
+
+.submit-btn {
+  background: #4CAF50;
+  border: none;
+  color: #fff;
+  padding: 16px 32px;
+  border-radius: 12px;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.submit-btn:hover {
+  background: #43a047;
+}
+
+/* Messages */
+.msg {
+  text-align: center;
+  padding: 16px;
+  border-radius: 12px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.msg.success {
+  background: rgba(76, 175, 80, 0.2);
+  color: #4CAF50;
+}
+
+.msg.error {
+  background: rgba(255, 50, 50, 0.2);
+  color: #ff6b6b;
+}
+
+/* Finished */
+.finished {
+  text-align: center;
+  padding: 60px 0;
+}
+
+.finished h2 {
+  font-size: 42px;
+  margin-bottom: 24px;
+}
