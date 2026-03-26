@@ -1,14 +1,14 @@
 /**
  * Pjak SDK — Local-only påskäggsjakt game logic.
- * No database, no networking. Just eggs, codes, and proximity.
+ * No database, no networking. Eggs with fixed codes from eggs.json.
  *
  * Usage:
  *   import { PjakGame } from './pjak-sdk';
  *   import eggs from '../shared/eggs.json';
  *
  *   const game = new PjakGame(eggs);
- *   game.start();
- *   game.on('eggFound', (egg, code) => { ... });
+ *   game.on('eggFound', (egg) => showCode(egg.code));
+ *   game.on('gameFinished', () => celebrate());
  *   game.updatePlayerPosition(lat, lng);
  */
 
@@ -17,89 +17,83 @@ export type Egg = {
   label: string;
   lat: number;
   lng: number;
-};
-
-export type SessionEgg = Egg & {
   code: string;
-  collected: boolean;
 };
 
 export type PjakEvents = {
-  start: (sessionEggs: SessionEgg[]) => void;
-  proximity: (distance: number, isInRange: boolean) => void;
-  eggFound: (egg: SessionEgg, code: string) => void;
-  eggCollected: (egg: SessionEgg, nextEgg: SessionEgg | null) => void;
-  gameFinished: (sessionEggs: SessionEgg[]) => void;
+  proximity: (egg: Egg, distance: number, isInRange: boolean) => void;
+  eggFound: (egg: Egg) => void;
+  codeCorrect: (egg: Egg, nextEgg: Egg | null) => void;
+  codeWrong: (egg: Egg, attempt: string) => void;
+  gameFinished: () => void;
 };
 
 export class PjakGame {
   private eggs: Egg[];
-  private session: SessionEgg[] = [];
   private currentIdx = 0;
+  private collected = new Set<number>();
   private proximityRadius: number;
   private listeners: Partial<{ [K in keyof PjakEvents]: PjakEvents[K][] }> = {};
 
   constructor(eggs: Egg[], proximityRadius = 15) {
     this.eggs = eggs;
-    this.proximityRadius = proximityRadius;
   }
 
-  // --- Start a new session (generates fresh codes) ---
-  start(): SessionEgg[] {
-    this.session = this.eggs.map(e => ({
-      ...e,
-      code: this.randomCode(),
-      collected: false,
-    }));
-    this.currentIdx = 0;
-    this.emit('start', this.session);
-    return this.session;
-  }
-
-  // --- Feed GPS position ---
+  // --- Feed GPS ---
   updatePlayerPosition(lat: number, lng: number): void {
-    const current = this.session[this.currentIdx];
-    if (!current || current.collected) return;
+    const current = this.eggs[this.currentIdx];
+    if (!current || this.isFinished()) return;
 
     const dist = this.distanceMeters(lat, lng, current.lat, current.lng);
     const inRange = dist <= this.proximityRadius;
-    this.emit('proximity', dist, inRange);
+    this.emit('proximity', current, dist, inRange);
 
     if (inRange) {
-      this.emit('eggFound', current, current.code);
+      this.emit('eggFound', current);
     }
   }
 
-  // --- Collect current egg ---
-  collect(): SessionEgg | null {
-    const current = this.session[this.currentIdx];
-    if (!current) return null;
-
-    current.collected = true;
-    this.currentIdx++;
-
-    const next = this.session[this.currentIdx] || null;
-    this.emit('eggCollected', current, next);
-
-    if (this.currentIdx >= this.session.length) {
-      this.emit('gameFinished', this.session);
-    }
-
-    return current;
-  }
-
-  // --- Validate a code (for Mac dashboard) ---
-  validateCode(input: string): boolean {
-    const current = this.session[this.currentIdx];
+  // --- Validate code (for Mac side) ---
+  submitCode(input: string): boolean {
+    const current = this.eggs[this.currentIdx];
     if (!current) return false;
-    return input.trim().toUpperCase() === current.code.toUpperCase();
+
+    if (input.trim().toUpperCase() === current.code.toUpperCase()) {
+      this.collected.add(current.id);
+      this.currentIdx++;
+      const next = this.eggs[this.currentIdx] || null;
+      this.emit('codeCorrect', current, next);
+      if (this.isFinished()) this.emit('gameFinished');
+      return true;
+    } else {
+      this.emit('codeWrong', current, input);
+      return false;
+    }
+  }
+
+  // --- Advance (for phone side, after showing code) ---
+  advance(): void {
+    const current = this.eggs[this.currentIdx];
+    if (!current) return;
+    this.collected.add(current.id);
+    this.currentIdx++;
+    const next = this.eggs[this.currentIdx] || null;
+    this.emit('codeCorrect', current, next);
+    if (this.isFinished()) this.emit('gameFinished');
+  }
+
+  // --- Reset ---
+  restart(): void {
+    this.currentIdx = 0;
+    this.collected.clear();
   }
 
   // --- Getters ---
-  getCurrentEgg(): SessionEgg | null { return this.session[this.currentIdx] || null; }
-  getSession(): SessionEgg[] { return this.session; }
+  getCurrentEgg(): Egg | null { return this.eggs[this.currentIdx] || null; }
+  getEggs(): Egg[] { return this.eggs; }
   getCurrentIndex(): number { return this.currentIdx; }
-  isFinished(): boolean { return this.currentIdx >= this.session.length; }
+  isCollected(id: number): boolean { return this.collected.has(id); }
+  isFinished(): boolean { return this.currentIdx >= this.eggs.length; }
 
   // --- Events ---
   on<K extends keyof PjakEvents>(event: K, callback: PjakEvents[K]): () => void {
@@ -115,13 +109,6 @@ export class PjakGame {
   private emit<K extends keyof PjakEvents>(event: K, ...args: Parameters<PjakEvents[K]>): void {
     const cbs = this.listeners[event] as PjakEvents[K][] | undefined;
     if (cbs) cbs.forEach(cb => (cb as (...a: any[]) => void)(...args));
-  }
-
-  private randomCode(): string {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let code = '';
-    for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
-    return code;
   }
 
   private distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {

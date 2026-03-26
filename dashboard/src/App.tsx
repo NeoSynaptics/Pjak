@@ -5,7 +5,6 @@ import 'leaflet/dist/leaflet.css';
 import './App.css';
 import eggs from '../../shared/eggs.json';
 
-// Fix Leaflet icons
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
@@ -16,50 +15,31 @@ L.Icon.Default.mergeOptions({
 const eggIcon = new L.DivIcon({ html: '<div style="font-size:28px;text-align:center">🥚</div>', iconSize: [32, 32], iconAnchor: [16, 16], className: '' });
 const collectedIcon = new L.DivIcon({ html: '<div style="font-size:28px;text-align:center">✅</div>', iconSize: [32, 32], iconAnchor: [16, 16], className: '' });
 
-function randomCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
-  return code;
-}
-
-type SessionEgg = { id: number; label: string; lat: number; lng: number; code: string; collected: boolean };
-
 function App() {
-  const [session, setSession] = useState<SessionEgg[]>([]);
   const [currentIdx, setCurrentIdx] = useState(0);
+  const [collectedSet, setCollectedSet] = useState<Set<number>>(new Set());
   const [codeInput, setCodeInput] = useState('');
   const [message, setMessage] = useState('');
-  const [gameActive, setGameActive] = useState(false);
 
-  const finished = gameActive && currentIdx >= session.length;
-  const current = session[currentIdx];
-
-  function startGame() {
-    const ses = eggs.map(e => ({ ...e, code: randomCode(), collected: false }));
-    setSession(ses);
-    setCurrentIdx(0);
-    setCodeInput('');
-    setMessage('');
-    setGameActive(true);
-  }
+  const current = eggs[currentIdx];
+  const finished = currentIdx >= eggs.length;
 
   function submitCode() {
     if (!current) return;
 
     if (codeInput.trim().toUpperCase() === current.code.toUpperCase()) {
-      const updated = [...session];
-      updated[currentIdx].collected = true;
-      setSession(updated);
+      const newCollected = new Set(collectedSet);
+      newCollected.add(current.id);
+      setCollectedSet(newCollected);
 
       const nextIdx = currentIdx + 1;
       setCurrentIdx(nextIdx);
       setCodeInput('');
 
-      if (nextIdx >= session.length) {
-        setMessage('🎉 Alla ägg hittade! Grattis!');
+      if (nextIdx >= eggs.length) {
+        setMessage('🎉 Alla ägg hittade!');
       } else {
-        setMessage('✅ Rätt! Nästa ägg: ' + session[nextIdx].label);
+        setMessage('✅ Rätt! Nästa: ' + eggs[nextIdx].label);
         setTimeout(() => setMessage(''), 3000);
       }
     } else {
@@ -68,7 +48,16 @@ function App() {
     }
   }
 
-  const mapCenter: [number, number] = eggs.length > 0
+  function restart() {
+    setCurrentIdx(0);
+    setCollectedSet(new Set());
+    setCodeInput('');
+    setMessage('');
+  }
+
+  const mapCenter: [number, number] = current
+    ? [current.lat, current.lng]
+    : eggs.length > 0
     ? [eggs[0].lat, eggs[0].lng]
     : [59.33, 18.07];
 
@@ -80,67 +69,56 @@ function App() {
 
       <div className="game-layout">
         <div className="map-container">
-          <MapContainer center={mapCenter} zoom={15} style={{ height: '100%', width: '100%' }}>
+          <MapContainer center={mapCenter} zoom={16} style={{ height: '100%', width: '100%' }}>
             <TileLayer
               attribution='&copy; OpenStreetMap'
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
-            {(gameActive ? session : eggs.map(e => ({ ...e, collected: false }))).map((e) => (
+            {eggs.map((e) => (
               <Marker
                 key={e.id}
                 position={[e.lat, e.lng]}
-                icon={e.collected ? collectedIcon : eggIcon}
-                opacity={gameActive && !e.collected && e.id === current?.id ? 1 : 0.5}
+                icon={collectedSet.has(e.id) ? collectedIcon : eggIcon}
+                opacity={!finished && current && e.id === current.id ? 1 : 0.4}
               />
             ))}
             {current && !finished && (
               <Circle
                 center={[current.lat, current.lng]}
                 radius={15}
-                pathOptions={{ color: '#FF6B35', fillOpacity: 0.1 }}
+                pathOptions={{ color: '#FF6B35', fillOpacity: 0.15 }}
               />
             )}
           </MapContainer>
         </div>
 
         <div className="game-sidebar">
-          {/* Not started */}
-          {!gameActive && (
-            <div className="start-section">
-              <p className="egg-count">{eggs.length} ägg redo</p>
-              <button className="start-btn" onClick={startGame}>Starta Jakt!</button>
-              <p className="start-hint">Nya koder genereras varje omgång</p>
-            </div>
-          )}
+          {/* Progress */}
+          <div className="progress">
+            {eggs.map((e, i) => (
+              <div
+                key={e.id}
+                className={`progress-egg ${collectedSet.has(e.id) ? 'collected' : ''} ${i === currentIdx && !finished ? 'current' : ''}`}
+              >
+                {collectedSet.has(e.id) ? '✅' : '🥚'} {e.label}
+              </div>
+            ))}
+          </div>
 
           {/* Finished */}
-          {finished && (
+          {finished ? (
             <div className="start-section">
               <h2>🎉 Grattis!</h2>
-              <p>Alla {session.length} ägg hittade!</p>
-              <button className="start-btn" onClick={startGame}>Spela igen</button>
+              <p>Alla {eggs.length} ägg hittade!</p>
+              <button className="start-btn" onClick={restart}>Spela igen</button>
             </div>
-          )}
-
-          {/* Active game */}
-          {gameActive && !finished && (
+          ) : (
             <>
-              {/* Progress */}
-              <div className="progress">
-                {session.map((e, i) => (
-                  <div
-                    key={e.id}
-                    className={`progress-egg ${e.collected ? 'collected' : ''} ${i === currentIdx ? 'current' : ''}`}
-                  >
-                    {e.collected ? '✅' : '🥚'} {e.label}
-                  </div>
-                ))}
-              </div>
-
-              {/* Current target */}
+              {/* Current egg info */}
               <div className="target-card">
                 <h2>{current.label}</h2>
-                <p className="target-hint">Väntar på kod från telefonen...</p>
+                <p className="target-hint">Guida spelaren hit!</p>
+                <p className="target-coords">{current.lat.toFixed(5)}, {current.lng.toFixed(5)}</p>
               </div>
 
               {/* Code input */}
@@ -159,10 +137,6 @@ function App() {
                   <button className="submit-btn" onClick={submitCode}>OK</button>
                 </div>
               </div>
-
-              <button className="secondary-btn" onClick={() => setGameActive(false)}>
-                Avbryt spel
-              </button>
             </>
           )}
 

@@ -10,33 +10,17 @@ import eggs from '../shared/eggs.json';
 
 const PROXIMITY_RADIUS_M = 15;
 
-// Generate a deterministic-ish code per egg per session
-// Session seed is set once when app opens
-const SESSION_SEED = Date.now();
-function codeForEgg(eggId: number): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let hash = SESSION_SEED + eggId * 9973;
-  let code = '';
-  for (let i = 0; i < 4; i++) {
-    hash = ((hash * 31337) + 7) & 0x7fffffff;
-    code += chars[hash % chars.length];
-  }
-  return code;
-}
-
 export default function App() {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
   const [showEgg, setShowEgg] = useState(false);
   const [collected, setCollected] = useState(false);
-  const [codes] = useState(() => eggs.map(e => codeForEgg(e.id)));
 
   const bounceAnim = useRef(new Animated.Value(0)).current;
   const spinAnim = useRef(new Animated.Value(0)).current;
 
   const currentEgg = eggs[currentIdx];
-  const currentCode = codes[currentIdx];
   const finished = currentIdx >= eggs.length;
 
   // --- GPS ---
@@ -98,17 +82,21 @@ export default function App() {
     bounceAnim.setValue(0);
   }
 
-  // --- Screens ---
+  // --- Finished ---
   if (finished) {
     return (
       <View style={s.center}>
         <Text style={s.title}>🎉 Grattis!</Text>
         <Text style={s.subtitle}>Du hittade alla {eggs.length} ägg!</Text>
+        <TouchableOpacity style={s.btn} onPress={() => { setCurrentIdx(0); setCollected(false); }}>
+          <Text style={s.btnText}>Spela igen</Text>
+        </TouchableOpacity>
         <StatusBar style="light" />
       </View>
     );
   }
 
+  // --- Egg found ---
   if (showEgg && !collected) {
     return (
       <View style={s.eggContainer}>
@@ -116,7 +104,7 @@ export default function App() {
           <Text style={s.bigEgg}>🥚</Text>
           <View style={s.codeBox}>
             <Text style={s.codeLabel}>KOD</Text>
-            <Text style={s.codeText}>{currentCode}</Text>
+            <Text style={s.codeText}>{currentEgg.code}</Text>
           </View>
         </Animated.View>
         <TouchableOpacity style={s.collectBtn} onPress={collectEgg}>
@@ -127,21 +115,22 @@ export default function App() {
     );
   }
 
+  // --- Collected → tell player to type code on Mac ---
   if (collected) {
     return (
       <View style={s.center}>
-        <Text style={s.title}>✅ Insamlat!</Text>
-        <Text style={s.subtitle}>Koden: {currentCode}</Text>
+        <Text style={s.title}>✅ Hittad!</Text>
+        <Text style={s.codeReminder}>{currentEgg.code}</Text>
         <Text style={s.hint}>Skriv in koden på datorn!</Text>
         <TouchableOpacity style={s.btn} onPress={nextEgg}>
-          <Text style={s.btnText}>Nästa ägg</Text>
+          <Text style={s.btnText}>Nästa ägg →</Text>
         </TouchableOpacity>
         <StatusBar style="light" />
       </View>
     );
   }
 
-  // Map
+  // --- Map ---
   const dist = userLat && userLng
     ? distanceMeters(userLat, userLng, currentEgg.lat, currentEgg.lng)
     : null;
@@ -183,7 +172,8 @@ const s = StyleSheet.create({
   center: { flex: 1, backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center', padding: 32 },
   title: { fontSize: 48, color: '#fff', fontWeight: 'bold' },
   subtitle: { fontSize: 20, color: '#aaa', marginTop: 12 },
-  hint: { fontSize: 16, color: '#ffd700', marginTop: 20 },
+  hint: { fontSize: 16, color: '#aaa', marginTop: 20 },
+  codeReminder: { fontSize: 56, color: '#ffd700', fontWeight: 'bold', letterSpacing: 10, marginTop: 16 },
   btn: { marginTop: 24, backgroundColor: '#FF6B35', paddingHorizontal: 32, paddingVertical: 14, borderRadius: 12 },
   btnText: { color: '#fff', fontSize: 18, fontWeight: '600' },
   infoBar: {
