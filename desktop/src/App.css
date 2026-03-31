@@ -1,0 +1,794 @@
+/* === Easter Pirate — SKATTJAKT style, multi-screen === */
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+.screen {
+  width: 100vw;
+  height: 100vh;
+  background: #0a0a0a;
+  font-family: 'Space Mono', monospace;
+  color: #fff;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ============================
+   SCREEN 1: SPLASH
+   ============================ */
+.splash-screen {
+  cursor: pointer;
+}
+
+.splash-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.splash-overlay {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+}
+
+.splash-title {
+  font-size: 5rem;
+  font-weight: 700;
+  color: #e3ff00;
+  letter-spacing: 0.12em;
+  text-shadow: 0 0 60px rgba(227, 255, 0, 0.5), 0 0 120px rgba(227, 255, 0, 0.2);
+  animation: flicker 3s ease-in-out infinite;
+  margin-bottom: 2rem;
+}
+
+.splash-start {
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 0.75rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+}
+
+@keyframes flicker {
+  0% { opacity: 1; text-shadow: 0 0 60px rgba(227, 255, 0, 0.5), 0 0 120px rgba(227, 255, 0, 0.2); }
+  35% { opacity: 1; text-shadow: 0 0 60px rgba(227, 255, 0, 0.5), 0 0 120px rgba(227, 255, 0, 0.2); }
+  45% { opacity: 0; text-shadow: none; }
+  55% { opacity: 0; text-shadow: none; }
+  65% { opacity: 1; text-shadow: 0 0 80px rgba(227, 255, 0, 0.6), 0 0 150px rgba(227, 255, 0, 0.3); }
+  100% { opacity: 1; text-shadow: 0 0 60px rgba(227, 255, 0, 0.5), 0 0 120px rgba(227, 255, 0, 0.2); }
+}
+
+/* ============================
+   GLOW
+   ============================ */
+.glow {
+  position: fixed;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(227, 255, 0, 0.04) 0%, transparent 70%);
+  pointer-events: none;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+.glow-gold {
+  background: radial-gradient(circle, rgba(227, 255, 0, 0.08) 0%, transparent 70%);
+}
+.glow-red {
+  background: radial-gradient(circle, rgba(255, 50, 50, 0.06) 0%, transparent 70%);
+}
+
+.center-content {
+  text-align: center;
+  z-index: 1;
+}
+
+/* ============================
+   TIMER
+   ============================ */
+.timer {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #e3ff00;
+  letter-spacing: 0.15em;
+  font-family: 'Space Mono', monospace;
+  text-shadow: 0 0 20px rgba(227, 255, 0, 0.3);
+}
+
+.timer-urgent {
+  color: #ff3333;
+  text-shadow: 0 0 20px rgba(255, 51, 51, 0.4);
+  animation: timer-blink 1s infinite;
+}
+
+@keyframes timer-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ============================
+   GAME LAYOUT (screens 2-4)
+   ============================ */
+.game-screen {
+  display: flex;
+  flex-direction: column;
+}
+
+.game-body {
+  flex: 1;
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+.game-map {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+}
+
+/* Map overlay: quest list */
+.map-quest-list {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mq-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: rgba(10, 10, 10, 0.85);
+  border: 1px solid rgba(227, 255, 0, 0.1);
+  border-radius: 8px;
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 0.1em;
+}
+.mq-item:hover { border-color: rgba(227, 255, 0, 0.4); }
+.mq-item.mq-active {
+  color: #e3ff00;
+  border-color: rgba(227, 255, 0, 0.4);
+  background: rgba(227, 255, 0, 0.06);
+}
+.mq-item.mq-done {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Direction overlay (quest screen) */
+.direction-overlay {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  text-align: center;
+  background: rgba(10, 10, 10, 0.85);
+  border: 1px solid rgba(227, 255, 0, 0.2);
+  border-radius: 10px;
+  padding: 10px 24px;
+}
+
+.direction-label {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #e3ff00;
+  letter-spacing: 0.15em;
+}
+
+.direction-distance {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 4px;
+  letter-spacing: 0.1em;
+}
+
+/* ============================
+   RIGHT PANEL (code entry)
+   ============================ */
+.game-panel {
+  width: 380px;
+  min-width: 380px;
+  background: #0a0a0a;
+  border-left: 1px solid rgba(227, 255, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  gap: 24px;
+  overflow-y: auto;
+}
+
+.panel-quest-info {
+  text-align: center;
+}
+
+.quest-num {
+  font-size: 0.65rem;
+  letter-spacing: 0.4em;
+  color: rgba(227, 255, 0, 0.4);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.quest-title-sm {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #e3ff00;
+  margin: 0 0 8px;
+  text-shadow: 0 0 20px rgba(227, 255, 0, 0.15);
+}
+
+.quest-hint {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.25);
+  letter-spacing: 0.1em;
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+
+.btn-go-quest {
+  background: none;
+  border: 1px solid rgba(227, 255, 0, 0.2);
+  color: rgba(227, 255, 0, 0.5);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-go-quest:hover {
+  border-color: #e3ff00;
+  color: #e3ff00;
+}
+
+/* Code entry section */
+.panel-code {
+  text-align: center;
+}
+
+.code-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.5em;
+  color: rgba(255, 255, 255, 0.3);
+  margin-bottom: 16px;
+  font-weight: 400;
+}
+
+/* ============================
+   CODE ROW (digit boxes)
+   ============================ */
+.code-row {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.digit-box {
+  width: 42px;
+  height: 56px;
+  background: transparent;
+  border: 2px solid rgba(227, 255, 0, 0.15);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #e3ff00;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.08s;
+  position: relative;
+  font-family: 'Space Mono', monospace;
+}
+
+.digit-box.active {
+  border-color: #e3ff00;
+  box-shadow: 0 0 15px rgba(227, 255, 0, 0.12), inset 0 0 15px rgba(227, 255, 0, 0.04);
+}
+
+.digit-box.filled {
+  border-color: rgba(227, 255, 0, 0.45);
+}
+
+.digit-box.space-box {
+  border-color: rgba(227, 255, 0, 0.1);
+  background: rgba(227, 255, 0, 0.02);
+}
+
+.digit-box.fixed {
+  border-color: rgba(227, 255, 0, 0.25);
+  background: rgba(227, 255, 0, 0.06);
+  color: rgba(227, 255, 0, 0.5);
+  cursor: default;
+}
+
+.cursor {
+  width: 2px;
+  height: 28px;
+  background: #e3ff00;
+  animation: blink 1s infinite;
+  position: absolute;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.code-row.error .digit-box {
+  border-color: #ff3333;
+  box-shadow: 0 0 20px rgba(255, 51, 51, 0.3);
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  15% { transform: translateX(-10px); }
+  30% { transform: translateX(8px); }
+  45% { transform: translateX(-6px); }
+  60% { transform: translateX(5px); }
+  75% { transform: translateX(-3px); }
+}
+
+.code-row.success .digit-box {
+  border-color: #e3ff00;
+  box-shadow: 0 0 30px rgba(227, 255, 0, 0.5);
+  animation: successPulse 0.6s ease-out;
+}
+
+@keyframes successPulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.06); }
+  100% { transform: scale(1); }
+}
+
+/* ============================
+   HINTS
+   ============================ */
+.hint {
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 0.65rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+}
+.hint.found {
+  color: #e3ff00;
+  animation: fadeIn 0.3s;
+}
+.hint.error-text {
+  color: #ff3333;
+  animation: fadeIn 0.3s;
+}
+.hint.clickable {
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.hint.clickable:hover {
+  color: #e3ff00;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================
+   CANDY METER (vertical bar)
+   ============================ */
+.candy-meter {
+  text-align: center;
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.candy-meter-label {
+  font-size: 0.55rem;
+  letter-spacing: 0.4em;
+  color: rgba(255, 255, 255, 0.2);
+  text-transform: uppercase;
+}
+
+.candy-meter-track {
+  width: 40px;
+  height: 180px;
+  border: 2px solid rgba(227, 255, 0, 0.2);
+  border-radius: 10px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  background: rgba(227, 255, 0, 0.02);
+}
+
+.candy-meter-fill {
+  width: 100%;
+  background: linear-gradient(to top,
+    #e65100 0%,
+    #ff9800 25%,
+    #f5d623 55%,
+    #e3ff00 100%
+  );
+  transition: height 0.8s ease-out;
+  border-radius: 0 0 8px 8px;
+  position: relative;
+}
+
+.candy-meter-fill.candy-danger {
+  background: linear-gradient(to top,
+    #b71c1c 0%,
+    #f44336 50%,
+    #ff9800 100%
+  );
+  animation: danger-pulse 1s infinite;
+}
+
+@keyframes danger-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+.candy-meter-icons {
+  font-size: 14px;
+  letter-spacing: 4px;
+}
+
+.candy-meter-pct {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #e3ff00;
+  letter-spacing: 0.1em;
+}
+
+/* ============================
+   VICTORY / TIME UP
+   ============================ */
+.title-victory {
+  color: #e3ff00;
+  font-size: 2rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  margin-bottom: 1rem;
+  font-weight: 700;
+  text-shadow: 0 0 40px rgba(227, 255, 0, 0.3);
+}
+
+.victory-time {
+  color: rgba(227, 255, 0, 0.5);
+  font-size: 0.8rem;
+  letter-spacing: 0.2em;
+  margin-bottom: 2rem;
+}
+
+.title-timeup {
+  color: #ff3333;
+  font-size: 2rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  font-weight: 700;
+  text-shadow: 0 0 40px rgba(255, 51, 51, 0.3);
+}
+
+.trophy-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+}
+
+.trophy-chip {
+  padding: 10px 20px;
+  border: 1px solid rgba(227, 255, 0, 0.3);
+  border-radius: 10px;
+  color: #e3ff00;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  background: rgba(227, 255, 0, 0.05);
+}
+
+/* ============================
+   TREASURE MAP
+   ============================ */
+.map-container {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0d0d15;
+  overflow: hidden;
+}
+
+.treasure-map-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+/* ============================
+   PHONE DOT (on treasure map)
+   ============================ */
+.phone-dot {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 20;
+  pointer-events: none;
+}
+
+.phone-dot-core {
+  font-size: 24px;
+  position: relative;
+  z-index: 2;
+  filter: drop-shadow(0 0 8px rgba(0, 150, 255, 0.8));
+}
+
+.phone-dot-ping {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(0, 150, 255, 0.2);
+  border: 2px solid rgba(0, 150, 255, 0.5);
+  animation: ping 2s infinite;
+  z-index: 1;
+}
+
+@keyframes ping {
+  0% { width: 20px; height: 20px; opacity: 1; }
+  100% { width: 60px; height: 60px; opacity: 0; }
+}
+
+/* ============================
+   EGG MARKERS (overview map)
+   ============================ */
+.egg-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 15;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-family: 'Space Mono', monospace;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.egg-marker.egg-pending {
+  background: rgba(227, 255, 0, 0.15);
+  border: 2px solid #e3ff00;
+  color: #e3ff00;
+  box-shadow: 0 0 15px rgba(227, 255, 0, 0.3);
+}
+.egg-marker.egg-pending:hover {
+  box-shadow: 0 0 25px rgba(227, 255, 0, 0.5);
+  transform: translate(-50%, -50%) scale(1.15);
+}
+
+.egg-marker.egg-done {
+  background: rgba(76, 175, 80, 0.15);
+  border: 2px solid #4caf50;
+  color: #4caf50;
+  cursor: default;
+  font-size: 16px;
+}
+
+/* ============================
+   EGG TARGET (quest map, single skull)
+   ============================ */
+.egg-target {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 15;
+  pointer-events: none;
+}
+
+.egg-target-icon {
+  font-size: 32px;
+  position: relative;
+  z-index: 2;
+  filter: drop-shadow(0 0 12px rgba(227, 255, 0, 0.6));
+}
+
+.egg-target-pulse {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  border: 2px solid rgba(227, 255, 0, 0.4);
+  animation: target-pulse 2s infinite;
+  z-index: 1;
+}
+
+@keyframes target-pulse {
+  0% { width: 30px; height: 30px; opacity: 0.8; border-color: rgba(227, 255, 0, 0.6); }
+  100% { width: 80px; height: 80px; opacity: 0; border-color: rgba(227, 255, 0, 0); }
+}
+
+/* ============================
+   DISTANCE BADGE
+   ============================ */
+.distance-badge {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  background: rgba(10, 10, 10, 0.9);
+  border: 1px solid rgba(227, 255, 0, 0.2);
+  border-radius: 12px;
+  padding: 12px 28px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  backdrop-filter: blur(4px);
+}
+
+.distance-label {
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 0.7rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.distance-value {
+  color: #e3ff00;
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+/* ============================
+   QUEST PICKER (overview panel)
+   ============================ */
+.panel-heading {
+  font-size: 0.8rem;
+  letter-spacing: 0.4em;
+  color: #e3ff00;
+  text-align: center;
+  margin: 0 0 4px;
+  font-weight: 700;
+}
+
+.quest-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.pick-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid rgba(227, 255, 0, 0.1);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.pick-item:hover {
+  border-color: rgba(227, 255, 0, 0.4);
+  background: rgba(227, 255, 0, 0.03);
+}
+.pick-item.pick-done {
+  opacity: 0.35;
+  cursor: default;
+}
+.pick-item.pick-done:hover {
+  border-color: rgba(227, 255, 0, 0.1);
+  background: none;
+}
+
+.pick-num {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid rgba(227, 255, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #e3ff00;
+}
+
+.pick-label {
+  flex: 1;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+}
+
+.pick-tag {
+  font-size: 0.6rem;
+  color: #4caf50;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.pick-arrow {
+  color: rgba(227, 255, 0, 0.4);
+  font-size: 1.2rem;
+}
+
+/* ============================
+   PROGRESS STRIP (numbered, no names)
+   ============================ */
+.progress-strip {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.prog-pip {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.15);
+  border: 2px solid rgba(227, 255, 0, 0.1);
+  transition: all 0.3s;
+  font-family: 'Space Mono', monospace;
+}
+
+.prog-pip.prog-done {
+  border-color: #e3ff00;
+  color: #e3ff00;
+  background: rgba(227, 255, 0, 0.08);
+  box-shadow: 0 0 10px rgba(227, 255, 0, 0.2);
+}
+
+.prog-pip.prog-current {
+  border-color: #e3ff00;
+  color: #e3ff00;
+  animation: pip-pulse 1.5s infinite;
+}
+
+@keyframes pip-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(227, 255, 0, 0.3); }
+  50% { box-shadow: 0 0 20px rgba(227, 255, 0, 0.7); }
+}

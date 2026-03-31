@@ -1,198 +1,246 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
-  StyleSheet, Text, View, TouchableOpacity, Animated, Alert,
+  StyleSheet, Text, View, Image, Animated, Alert, ActivityIndicator,
+  Dimensions, TouchableOpacity,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
 import MapView, { Marker } from 'react-native-maps';
+import { createClient } from '@supabase/supabase-js';
 import { distanceMeters } from './src/geo';
-import eggs from '../shared/eggs.json';
 
-const PROXIMITY_RADIUS_M = 15;
+const supabase = createClient(
+  'https://vlaxnupgdviexicirfcq.supabase.co',
+  'sb_publishable_62WFR5KXOQcK0Hu_BslujQ_Cs2X3iN9'
+);
+
+const PROXIMITY_RADIUS_M = 20;
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+
+// Bundled pirate quest images — keyed by model_ref in Supabase
+const QUEST_IMAGES: Record<string, any> = {
+  dumle: require('./assets/dumle.png'),
+  geisha: require('./assets/geisha.png'),
+  ferrero: require('./assets/ferrero.png'),
+  test_egg: require('./assets/test_egg.png'),
+};
+
+type PjakObject = {
+  id: string;
+  label: string;
+  lat: number;
+  lng: number;
+  type: string;
+  code: string;
+  display_text: string | null;
+  model_ref: string | null;
+};
+
+const DEVICE_NAME = 'Pirattelefon';
 
 export default function App() {
-  const [currentIdx, setCurrentIdx] = useState(0);
+  const [objects, setObjects] = useState<PjakObject[]>([]);
+  const [loading, setLoading] = useState(true);
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
-  const [showEgg, setShowEgg] = useState(false);
-  const [collected, setCollected] = useState(false);
+  const [nearbyObject, setNearbyObject] = useState<PjakObject | null>(null);
+  const [deviceDbId, setDeviceDbId] = useState<string | null>(null);
+  const [ready, setReady] = useState(false); // delay proximity check so compass shows first
 
-  const bounceAnim = useRef(new Animated.Value(0)).current;
-  const spinAnim = useRef(new Animated.Value(0)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  const currentEgg = eggs[currentIdx];
-  const finished = currentIdx >= eggs.length;
+  // --- Load objects + register device on startup ---
+  useEffect(() => {
+    (async () => {
+      // Load objects
+      const { data } = await supabase.from('objects').select('*').order('created_at');
+      if (data) setObjects(data);
 
-  // --- GPS ---
+      // Register device (or reuse existing)
+      const { data: existing } = await supabase.from('devices').select('id').eq('name', DEVICE_NAME).single();
+      if (existing) {
+        setDeviceDbId(existing.id);
+      } else {
+        const { data: created } = await supabase.from('devices').insert({ name: DEVICE_NAME, lat: 0, lng: 0 }).select('id').single();
+        if (created) setDeviceDbId(created.id);
+      }
+
+      setLoading(false);
+    })();
+  }, []);
+
+  // --- GPS + broadcast to devices table ---
   useEffect(() => {
     let sub: Location.LocationSubscription | null = null;
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('GPS behövs', 'Aktivera platsåtkomst för att hitta äggen!');
+        Alert.alert('GPS behövs', 'Aktivera platsåtkomst för att hitta skatten!');
         return;
       }
       sub = await Location.watchPositionAsync(
         { accuracy: Location.Accuracy.High, distanceInterval: 2, timeInterval: 2000 },
-        (loc) => { setUserLat(loc.coords.latitude); setUserLng(loc.coords.longitude); }
+        (loc) => {
+          const lat = loc.coords.latitude;
+          const lng = loc.coords.longitude;
+          setUserLat(lat);
+          setUserLng(lng);
+          // Broadcast position to Supabase — force execution with .then()
+          supabase.from('devices').update({ lat, lng, updated_at: new Date().toISOString() }).eq('name', DEVICE_NAME).then(() => {});
+        }
       );
     })();
     return () => { sub?.remove(); };
   }, []);
 
-  // --- Proximity ---
+  // --- Delay proximity detection so compass screen shows first ---
   useEffect(() => {
-    if (finished || !currentEgg || userLat === null || userLng === null) return;
-    const dist = distanceMeters(userLat, userLng, currentEgg.lat, currentEgg.lng);
-    if (dist <= PROXIMITY_RADIUS_M && !collected) {
-      setShowEgg(true);
-    } else if (dist > PROXIMITY_RADIUS_M * 2) {
-      setShowEgg(false);
+    const timer = setTimeout(() => setReady(true), 5000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // --- Proximity check: find nearest object within radius ---
+  useEffect(() => {
+    if (!ready || userLat === null || userLng === null || objects.length === 0) return;
+
+    let closest: PjakObject | null = null;
+    let closestDist = Infinity;
+
+    for (const obj of objects) {
+      const dist = distanceMeters(userLat, userLng, obj.lat, obj.lng);
+      if (dist <= PROXIMITY_RADIUS_M && dist < closestDist) {
+        closest = obj;
+        closestDist = dist;
+      }
     }
-  }, [userLat, userLng, currentIdx, collected, finished]);
 
-  // --- Animation ---
+    setNearbyObject(closest);
+  }, [userLat, userLng, objects, ready]);
+
+  // --- Fade-in animation when photo appears ---
   useEffect(() => {
-    if (!showEgg) return;
-    const spin = Animated.loop(
-      Animated.timing(spinAnim, { toValue: 1, duration: 3000, useNativeDriver: true })
-    );
-    const bounce = Animated.loop(
-      Animated.sequence([
-        Animated.timing(bounceAnim, { toValue: -20, duration: 800, useNativeDriver: true }),
-        Animated.timing(bounceAnim, { toValue: 0, duration: 800, useNativeDriver: true }),
-      ])
-    );
-    spin.start(); bounce.start();
-    return () => { spin.stop(); bounce.stop(); };
-  }, [showEgg]);
+    if (!nearbyObject) {
+      fadeAnim.setValue(0);
+      return;
+    }
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
+  }, [nearbyObject?.id]);
 
-  const spinInterp = spinAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
-
-  function collectEgg() {
-    setCollected(true);
-    setShowEgg(false);
-  }
-
-  function nextEgg() {
-    setCurrentIdx(currentIdx + 1);
-    setCollected(false);
-    setShowEgg(false);
-    spinAnim.setValue(0);
-    bounceAnim.setValue(0);
-  }
-
-  // --- Finished ---
-  if (finished) {
+  // --- Loading ---
+  if (loading) {
     return (
       <View style={s.center}>
-        <Text style={s.title}>🎉 Grattis!</Text>
-        <Text style={s.subtitle}>Du hittade alla {eggs.length} ägg!</Text>
-        <TouchableOpacity style={s.btn} onPress={() => { setCurrentIdx(0); setCollected(false); }}>
-          <Text style={s.btnText}>Spela igen</Text>
-        </TouchableOpacity>
+        <ActivityIndicator size="large" color="#ffd700" />
+        <Text style={s.subtitle}>Laddar skattkartan...</Text>
         <StatusBar style="light" />
       </View>
     );
   }
 
-  // --- Egg found ---
-  if (showEgg && !collected) {
+  // --- Photo reveal when player reaches the spot ---
+  if (nearbyObject) {
+    const imageSource = nearbyObject.model_ref ? QUEST_IMAGES[nearbyObject.model_ref] : null;
+
     return (
-      <View style={s.eggContainer}>
-        <Animated.View style={[s.eggWrap, { transform: [{ translateY: bounceAnim }, { rotateY: spinInterp }] }]}>
-          <Text style={s.bigEgg}>🥚</Text>
-          <View style={s.codeBox}>
-            <Text style={s.codeLabel}>KOD</Text>
-            <Text style={s.codeText}>{currentEgg.code}</Text>
-          </View>
-        </Animated.View>
-        <TouchableOpacity style={s.collectBtn} onPress={collectEgg}>
-          <Text style={s.collectBtnText}>Samla in!</Text>
-        </TouchableOpacity>
+      <View style={s.foundContainer}>
         <StatusBar style="light" />
-      </View>
-    );
-  }
 
-  // --- Collected → tell player to type code on Mac ---
-  if (collected) {
-    return (
-      <View style={s.center}>
-        <Text style={s.title}>✅ Hittad!</Text>
-        <Text style={s.codeReminder}>{currentEgg.code}</Text>
-        <Text style={s.hint}>Skriv in koden på datorn!</Text>
-        <TouchableOpacity style={s.btn} onPress={nextEgg}>
-          <Text style={s.btnText}>Nästa ägg →</Text>
-        </TouchableOpacity>
-        <StatusBar style="light" />
-      </View>
-    );
-  }
-
-  // --- Map ---
-  const dist = userLat && userLng
-    ? distanceMeters(userLat, userLng, currentEgg.lat, currentEgg.lng)
-    : null;
-
-  return (
-    <View style={s.container}>
-      <MapView
-        style={s.map}
-        initialRegion={{
-          latitude: currentEgg.lat, longitude: currentEgg.lng,
-          latitudeDelta: 0.005, longitudeDelta: 0.005,
-        }}
-        showsUserLocation
-        showsMyLocationButton
-      >
-        <Marker
-          coordinate={{ latitude: currentEgg.lat, longitude: currentEgg.lng }}
-          title={currentEgg.label}
-          pinColor="#FF6B35"
-        />
-      </MapView>
-      <View style={s.infoBar}>
-        <Text style={s.infoTitle}>🥚 {currentEgg.label}</Text>
-        {dist !== null && (
-          <Text style={s.infoDist}>
-            {dist < 1000 ? `${Math.round(dist)} m` : `${(dist / 1000).toFixed(1)} km`} kvar
-          </Text>
+        {imageSource ? (
+          <Animated.View style={[s.photoWrap, { opacity: fadeAnim }]}>
+            <Image source={imageSource} style={s.photo} resizeMode="contain" />
+          </Animated.View>
+        ) : (
+          <Text style={s.foundIcon}>🏴‍☠️</Text>
         )}
-        <Text style={s.infoHint}>Ägg {currentIdx + 1} av {eggs.length}</Text>
+
+        <View style={s.hintBar}>
+          <Text style={s.hintTitle}>Skatten hittad!</Text>
+          <Text style={s.hintText}>Studera bilden noga — hitta det hemliga kodordet!</Text>
+        </View>
       </View>
-      <StatusBar style="dark" />
+    );
+  }
+
+  // --- Compass walking screen — shown while searching ---
+  return (
+    <View style={s.compassContainer}>
+      <StatusBar style="light" />
+
+      <Image source={require('./assets/compass.png')} style={s.compass} resizeMode="contain" />
+
+      <Text style={s.compassTitle}>Följ kaptenens order...</Text>
+      <Text style={s.compassHint}>Lyssna på datorn — de ser var du är!</Text>
+
+      {userLat && userLng && (
+        <View style={s.coordsBadge}>
+          <Text style={s.coordsText}>{userLat.toFixed(5)}, {userLng.toFixed(5)}</Text>
+        </View>
+      )}
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1 },
-  map: { flex: 1 },
-  center: { flex: 1, backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center', padding: 32 },
-  title: { fontSize: 48, color: '#fff', fontWeight: 'bold' },
-  subtitle: { fontSize: 20, color: '#aaa', marginTop: 12 },
-  hint: { fontSize: 16, color: '#aaa', marginTop: 20 },
-  codeReminder: { fontSize: 56, color: '#ffd700', fontWeight: 'bold', letterSpacing: 10, marginTop: 16 },
-  btn: { marginTop: 24, backgroundColor: '#FF6B35', paddingHorizontal: 32, paddingVertical: 14, borderRadius: 12 },
-  btnText: { color: '#fff', fontSize: 18, fontWeight: '600' },
-  infoBar: {
+  center: { flex: 1, backgroundColor: '#0b1129', alignItems: 'center', justifyContent: 'center', padding: 32 },
+  subtitle: { fontSize: 16, color: '#aaa', marginTop: 12 },
+
+  // Compass walking screen
+  compassContainer: {
+    flex: 1,
+    backgroundColor: '#0b1129',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  compass: {
+    width: SCREEN_W * 0.6,
+    height: SCREEN_W * 0.6,
+    marginBottom: 32,
+  },
+  compassTitle: {
+    color: '#e3ff00',
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    letterSpacing: 1,
+  },
+  compassHint: {
+    color: 'rgba(255,255,255,0.3)',
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 10,
+    letterSpacing: 0.5,
+  },
+  coordsBadge: {
+    marginTop: 24,
+    backgroundColor: 'rgba(227,255,0,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(227,255,0,0.15)',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  coordsText: {
+    color: 'rgba(227,255,0,0.4)',
+    fontSize: 11,
+    fontFamily: 'Courier',
+  },
+
+  // Photo reveal
+  foundContainer: { flex: 1, backgroundColor: '#0b1129' },
+  photoWrap: { flex: 1 },
+  photo: { width: SCREEN_W, height: SCREEN_H * 0.82 },
+  foundIcon: { fontSize: 120, textAlign: 'center', marginTop: 80 },
+  hintBar: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
-    backgroundColor: 'rgba(26,26,46,0.95)', padding: 20, paddingBottom: 40,
+    backgroundColor: 'rgba(11,17,41,0.95)', padding: 20, paddingBottom: 40,
     borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    alignItems: 'center',
   },
-  infoTitle: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
-  infoDist: { color: '#FF6B35', fontSize: 32, fontWeight: 'bold', marginTop: 4 },
-  infoHint: { color: '#888', fontSize: 14, marginTop: 6 },
-  eggContainer: { flex: 1, backgroundColor: '#1a1a2e', alignItems: 'center', justifyContent: 'center' },
-  eggWrap: { alignItems: 'center' },
-  bigEgg: { fontSize: 120 },
-  codeBox: {
-    marginTop: 20, backgroundColor: '#ffd700', paddingHorizontal: 32, paddingVertical: 16,
-    borderRadius: 16, alignItems: 'center',
-  },
-  codeLabel: { fontSize: 14, color: '#333', fontWeight: '600' },
-  codeText: { fontSize: 48, color: '#1a1a2e', fontWeight: 'bold', letterSpacing: 8 },
-  collectBtn: { marginTop: 40, backgroundColor: '#4CAF50', paddingHorizontal: 48, paddingVertical: 16, borderRadius: 16 },
-  collectBtnText: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
+  hintTitle: { color: '#e3ff00', fontSize: 22, fontWeight: 'bold' },
+  hintText: { color: '#aaa', fontSize: 14, marginTop: 6, textAlign: 'center' },
 });
