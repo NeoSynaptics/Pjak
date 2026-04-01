@@ -14,7 +14,7 @@ const supabase = createClient(
   'sb_publishable_62WFR5KXOQcK0Hu_BslujQ_Cs2X3iN9'
 );
 
-const PROXIMITY_RADIUS_M = 20;
+const PROXIMITY_RADIUS_M = 50;  // meters — bump for GPS drift tolerance
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 // Bundled pirate quest images — keyed by model_ref in Supabase
@@ -178,6 +178,14 @@ export default function App() {
       {userLat && userLng && (
         <View style={s.coordsBadge}>
           <Text style={s.coordsText}>{userLat.toFixed(5)}, {userLng.toFixed(5)}</Text>
+          {objects.map((obj) => {
+            const dist = distanceMeters(userLat, userLng, obj.lat, obj.lng);
+            return (
+              <Text key={obj.id} style={[s.coordsText, dist <= PROXIMITY_RADIUS_M && { color: '#00ff88' }]}>
+                {obj.label}: {dist < 1000 ? `${dist.toFixed(0)}m` : `${(dist / 1000).toFixed(1)}km`}
+              </Text>
+            );
+          })}
         </View>
       )}
     </View>

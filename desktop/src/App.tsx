@@ -25,10 +25,10 @@ const CANDY_STEP = 10;
 
 // Map image bounding box (GPS corners of the 1024x1024 quest-map.png)
 const MAP_BOUNDS = {
-  north: 57.9065,
-  south: 57.8985,
-  west: 14.0620,
-  east: 14.0790,
+  north: 57.90497,
+  south: 57.90030,
+  west: 14.06262,
+  east: 14.07643,
 };
 
 function gpsToPixel(lat: number, lng: number): { x: number; y: number } | null {
