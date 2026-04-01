@@ -14,7 +14,7 @@ const supabase = createClient(
   'sb_publishable_62WFR5KXOQcK0Hu_BslujQ_Cs2X3iN9'
 );
 
-const PROXIMITY_RADIUS_M = 50;  // meters — bump for GPS drift tolerance
+const PROXIMITY_RADIUS_M = 75;  // meters — generous for GPS drift
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 // Bundled pirate quest images — keyed by model_ref in Supabase
