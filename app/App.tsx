@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
   StyleSheet, Text, View, Image, Animated, Alert, ActivityIndicator,
-  Dimensions, TouchableOpacity,
+  Dimensions, TouchableOpacity, ScrollView,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as Location from 'expo-location';
@@ -147,20 +147,24 @@ export default function App() {
 
     return (
       <View style={s.foundContainer}>
-        <StatusBar style="light" />
+        <StatusBar style="light" hidden />
 
         {imageSource ? (
           <Animated.View style={[s.photoWrap, { opacity: fadeAnim }]}>
-            <Image source={imageSource} style={s.photo} resizeMode="contain" />
+            <ScrollView
+              maximumZoomScale={4}
+              minimumZoomScale={1}
+              contentContainerStyle={{ alignItems: 'center', justifyContent: 'center', flex: 1 }}
+              bouncesZoom
+            >
+              <Image source={imageSource} style={s.photoFull} resizeMode="contain" />
+            </ScrollView>
           </Animated.View>
         ) : (
           <Text style={s.foundIcon}>🏴‍☠️</Text>
         )}
 
-        <View style={s.hintBar}>
-          <Text style={s.hintTitle}>Skatten hittad!</Text>
-          <Text style={s.hintText}>Studera bilden noga — hitta det hemliga kodordet!</Text>
-        </View>
+        <Text style={s.hintOverlay}>Studera bilden noga — hitta det hemliga kodordet!</Text>
       </View>
     );
   }
@@ -239,16 +243,14 @@ const s = StyleSheet.create({
   },
 
   // Photo reveal
-  foundContainer: { flex: 1, backgroundColor: '#0b1129' },
+  foundContainer: { flex: 1, backgroundColor: '#000' },
   photoWrap: { flex: 1 },
-  photo: { width: SCREEN_W, height: SCREEN_H * 0.82 },
+  photoFull: { width: SCREEN_W, height: SCREEN_H },
   foundIcon: { fontSize: 120, textAlign: 'center', marginTop: 80 },
-  hintBar: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    backgroundColor: 'rgba(11,17,41,0.95)', padding: 20, paddingBottom: 40,
-    borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    alignItems: 'center',
+  hintOverlay: {
+    position: 'absolute', bottom: 40, left: 20, right: 20,
+    color: '#fff', fontSize: 13, textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.9)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4,
   },
-  hintTitle: { color: '#e3ff00', fontSize: 22, fontWeight: 'bold' },
   hintText: { color: '#aaa', fontSize: 14, marginTop: 6, textAlign: 'center' },
 });
