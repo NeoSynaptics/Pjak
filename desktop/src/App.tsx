@@ -61,6 +61,14 @@ function App() {
     })();
   }, []);
 
+  // Keep ngrok tunnel alive by pinging Expo server every 30s
+  useEffect(() => {
+    const ping = setInterval(() => {
+      fetch('http://localhost:8081').catch(() => {});
+    }, 30000);
+    return () => clearInterval(ping);
+  }, []);
+
   // Poll phone GPS
   useEffect(() => {
     if (screen !== 'quest') return;
