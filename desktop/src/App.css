@@ -412,20 +412,58 @@
   text-transform: uppercase;
 }
 
-.candy-meter-track {
-  width: 40px;
-  height: 180px;
-  border: 2px solid rgba(227, 255, 0, 0.2);
-  border-radius: 10px;
+/* Hourglass shape */
+.hourglass {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+.hourglass-top {
+  width: 60px;
+  height: 80px;
+  clip-path: polygon(0% 0%, 100% 0%, 65% 100%, 35% 100%);
+  border: 2px solid rgba(227, 255, 0, 0.25);
+  background: rgba(227, 255, 0, 0.03);
+  position: relative;
+  overflow: hidden;
+}
+
+.hourglass-sand-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(to bottom,
+    rgba(227, 255, 0, 0.15) 0%,
+    rgba(227, 255, 0, 0.05) 100%
+  );
+  transition: height 0.8s ease-out;
+}
+
+.hourglass-neck {
+  width: 12px;
+  height: 8px;
+  background: rgba(227, 255, 0, 0.15);
+  border-left: 2px solid rgba(227, 255, 0, 0.25);
+  border-right: 2px solid rgba(227, 255, 0, 0.25);
+}
+
+.hourglass-bottom {
+  width: 60px;
+  height: 80px;
+  clip-path: polygon(35% 0%, 65% 0%, 100% 100%, 0% 100%);
+  border: 2px solid rgba(227, 255, 0, 0.25);
+  background: rgba(227, 255, 0, 0.03);
   position: relative;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  background: rgba(227, 255, 0, 0.02);
 }
 
-.candy-meter-fill {
+.hourglass-sand-bottom {
   width: 100%;
   background: linear-gradient(to top,
     #e65100 0%,
@@ -434,17 +472,36 @@
     #e3ff00 100%
   );
   transition: height 0.8s ease-out;
-  border-radius: 0 0 8px 8px;
-  position: relative;
 }
 
-.candy-meter-fill.candy-danger {
+.hourglass-sand-bottom.candy-danger {
   background: linear-gradient(to top,
     #b71c1c 0%,
     #f44336 50%,
     #ff9800 100%
   );
   animation: danger-pulse 1s infinite;
+}
+
+.candy-piece {
+  position: absolute;
+  font-size: 10px;
+  animation: candy-float 3s ease-in-out infinite;
+  opacity: 0.8;
+}
+
+.candy-piece.fallen {
+  animation: candy-settle 2s ease-in-out infinite;
+}
+
+@keyframes candy-float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-4px) rotate(15deg); }
+}
+
+@keyframes candy-settle {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(2px) rotate(-10deg); }
 }
 
 @keyframes danger-pulse {
@@ -482,6 +539,48 @@
   font-size: 0.8rem;
   letter-spacing: 0.2em;
   margin-bottom: 2rem;
+}
+
+.riddle-screen {
+  max-width: 700px;
+}
+
+.riddle-scroll {
+  background: rgba(139, 90, 43, 0.15);
+  border: 2px solid rgba(139, 90, 43, 0.3);
+  border-radius: 12px;
+  padding: 2rem;
+  margin-bottom: 2rem;
+  animation: riddle-appear 1.5s ease-out;
+}
+
+.riddle-text {
+  color: rgba(255, 220, 150, 0.85);
+  font-size: 1rem;
+  line-height: 1.6;
+  margin-bottom: 1.2rem;
+  text-align: center;
+  font-style: italic;
+}
+
+.riddle-final {
+  color: #ff4400;
+  font-size: 1.8rem;
+  font-weight: 700;
+  text-align: center;
+  text-shadow: 0 0 30px rgba(255, 68, 0, 0.5), 0 0 60px rgba(255, 68, 0, 0.3);
+  animation: fire-glow 1.5s ease-in-out infinite;
+  margin-top: 1rem;
+}
+
+@keyframes riddle-appear {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fire-glow {
+  0%, 100% { text-shadow: 0 0 30px rgba(255, 68, 0, 0.5), 0 0 60px rgba(255, 68, 0, 0.3); }
+  50% { text-shadow: 0 0 50px rgba(255, 68, 0, 0.8), 0 0 100px rgba(255, 68, 0, 0.5); }
 }
 
 .title-timeup {

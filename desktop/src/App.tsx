@@ -56,7 +56,7 @@ function App() {
   useEffect(() => {
     (async () => {
       const { data } = await supabase.from('objects').select('*').order('created_at');
-      if (data) setObjects(data.filter(o => o.model_ref !== 'test_egg').slice(0, 3));
+      if (data) setObjects(data.filter(o => o.model_ref !== 'test_egg'));
       setLoading(false);
     })();
   }, []);
@@ -220,13 +220,28 @@ function App() {
     return (
       <div className="screen">
         <div className="glow glow-gold" />
-        <div className="center-content">
-          <h1 className="title-victory">ALLA LEDTRÅDAR LÖSTA!</h1>
+        <div className="center-content riddle-screen">
+          <h1 className="title-victory">⚔️ DEN SISTA GÅTAN ⚔️</h1>
           <p className="victory-time">Tid kvar: {timerStr}</p>
-          <div className="trophy-row">
-            {objects.map((_, i) => (
-              <div key={i} className="trophy-chip">✅ Ledtråd {i + 1}</div>
-            ))}
+          <div className="riddle-scroll">
+            <p className="riddle-text">
+              🔥 Burning up in hot hell you will!<br/>
+              Charcoal and fume from your own flesh if you're not careful!
+            </p>
+            <p className="riddle-text">
+              Close by, the treasure is — but burning flames<br/>
+              that might blow up might be around...
+            </p>
+            <p className="riddle-text">
+              ☀️ Rain or Sun I cannot promise,<br/>
+              but storm I wish upon you! ⛈️
+            </p>
+            <p className="riddle-text">
+              🏴‍☠️ Wood as floors and other pirate ships<br/>
+              might be seen from the deck —<br/>
+              but treasure you only find around...
+            </p>
+            <p className="riddle-final">🔥 BURNING FLESH!!! 🔥</p>
           </div>
           <p className="hint clickable" onClick={resetGame}>Tryck för att spela igen</p>
         </div>
@@ -349,14 +364,26 @@ function App() {
               {status === 'wrong' && <p className="hint error-text">Fel kodord! Godis dräneras...</p>}
             </div>
 
-            {/* Candy meter */}
+            {/* Candy meter — hourglass */}
             <div className="candy-meter">
               <div className="candy-meter-label">GODISFÖRRÅDET</div>
-              <div className="candy-meter-track">
-                <div
-                  className={`candy-meter-fill ${candyLevel <= 30 ? 'candy-danger' : ''}`}
-                  style={{ height: `${candyLevel}%` }}
-                />
+              <div className="hourglass">
+                <div className="hourglass-top">
+                  <div className="hourglass-sand-top" style={{ height: `${100 - candyLevel}%` }} />
+                  <span className="candy-piece" style={{ top: '15%', left: '30%' }}>🍬</span>
+                  <span className="candy-piece" style={{ top: '40%', left: '55%' }}>🍫</span>
+                  <span className="candy-piece" style={{ top: '25%', left: '65%' }}>🍭</span>
+                </div>
+                <div className="hourglass-neck" />
+                <div className="hourglass-bottom">
+                  <div
+                    className={`hourglass-sand-bottom ${candyLevel <= 30 ? 'candy-danger' : ''}`}
+                    style={{ height: `${candyLevel}%` }}
+                  />
+                  <span className="candy-piece fallen" style={{ bottom: '10%', left: '25%' }}>🍬</span>
+                  <span className="candy-piece fallen" style={{ bottom: '5%', left: '50%' }}>🍫</span>
+                  <span className="candy-piece fallen" style={{ bottom: '15%', left: '60%' }}>🍭</span>
+                </div>
               </div>
               <div className="candy-meter-icons">
                 🍬🍫🍭

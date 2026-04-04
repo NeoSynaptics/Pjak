@@ -22,6 +22,8 @@ const QUEST_IMAGES: Record<string, any> = {
   dumle: require('./assets/dumle.png'),
   geisha: require('./assets/geisha.png'),
   ferrero: require('./assets/ferrero.png'),
+  marabou: require('./assets/marabou.png'),
+  guinness: require('./assets/guinness.png'),
   test_egg: require('./assets/test_egg.png'),
 };
 
